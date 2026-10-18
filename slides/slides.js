@@ -60,7 +60,7 @@ async function loadFiles(files) {
     $("loaded").hidden = false; $("fileErr").textContent = "";
     $("startBtn").disabled = false;
     const thumbs = $("thumbs"); thumbs.innerHTML = "";
-    for (let i = 1; i <= Math.min(total, 12); i++) thumbs.appendChild(await renderPage(i, 70, true));
+    for (let i = 1; i <= Math.min(total, 24); i++) { const w = document.createElement("div"); w.className = "t"; w.appendChild(await renderPage(i, 120, true)); thumbs.appendChild(w); }
   } catch (err) {
     console.error(err);
     $("fileErr").textContent = "Couldn't open those slides (" + (err?.message || err) + "). Try saving them again from PowerPoint, or send this message to the DLU.";
@@ -135,6 +135,28 @@ function swoosh(kind) {
   src.connect(hp).connect(bp).connect(g).connect(actx.destination);
   src.start(t, Math.random() * 0.3); src.stop(t + dur + 0.02);
 }
+
+// ---------------- which hand does what ----------------
+// MediaPipe labels hands as if the picture were mirrored; our camera picture is not, so its "Left" is the presenter's right hand.
+const handRoles = () => $("handRoles").checked;   // right hand = next, left hand = back
+const swapHands = () => $("swapHands").checked;
+try { const v = localStorage.getItem("airswipe_roles"); if (v !== null) $("handRoles").checked = v === "1"; } catch {}
+try { const v = localStorage.getItem("airswipe_swap"); if (v !== null) $("swapHands").checked = v === "1"; } catch {}
+$("handRoles").addEventListener("change", () => { try { localStorage.setItem("airswipe_roles", handRoles() ? "1" : "0"); } catch {} });
+$("swapHands").addEventListener("change", () => { try { localStorage.setItem("airswipe_swap", swapHands() ? "1" : "0"); } catch {} });
+function whichHand(label) {
+  let h = label === "Left" ? "right" : label === "Right" ? "left" : null;
+  if (h && swapHands()) h = h === "right" ? "left" : "right";
+  return h;
+}
+// Is the palm (front of the hand) facing the camera? Sign of the turn wrist -> index knuckle -> little-finger knuckle.
+function palmFacing(lm, label) {
+  // Uses the hand as the camera sees it (not the swap setting): a right palm turns one way, a left palm the other.
+  const ax = lm[5].x - lm[0].x, ay = lm[5].y - lm[0].y, bx = lm[17].x - lm[0].x, by = lm[17].y - lm[0].y;
+  const z = ax * by - ay * bx;
+  return label === "Left" ? z < 0 : z > 0;   // "Left" label = presenter's right hand
+}
+const majority = arr => { const c = {}; arr.forEach(v => { if (v != null) c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || null; };
 
 // ---------------- hand zoom ----------------
 let zoom = 1, tx = 0, ty = 0, zoomGesture = null, pinchPrev = null, sharpTimer = null, zoomCooldown = 0;
@@ -340,14 +362,18 @@ function loop() {
   }
   zoomGesture = null;
   if (!lm && history.length && now - lastSeen < DROPOUT_MS) { if (gesturesOn && zoom <= 1) trySwipe(now); return; } // fast swipes blur the hand for a few frames
-  if (!lm) { history = []; handSince = 0; holdStart = 0; holdLatched = false; setMeter(0); $("cam").classList.remove("hot"); return; }
+  if (!lm) { history = []; handSince = 0; holdStart = 0; holdLatched = false; setMeter(0); $("cam").classList.remove("hot"); if (recognizer) $("camLbl").textContent = "Watching for gestures"; return; }
   $("cam").classList.add("hot");
   lastSeen = now;
   if (!handSince) handSince = now;
   const pts = [0, 5, 9, 13, 17].map(i => lm[i]);
   const x = pts.reduce((a, p) => a + p.x, 0) / pts.length;
   const y = pts.reduce((a, p) => a + p.y, 0) / pts.length;
-  history.push({ t: now, x, y });
+  const label = res.handedness?.[0]?.[0]?.categoryName;
+  const hand = whichHand(label);
+  const front = hand ? palmFacing(lm, label) : false;
+  history.push({ t: now, x, y, hand, front });
+  $("camLbl").textContent = hand ? `${hand === "right" ? "Right" : "Left"} hand · ${front ? "palm" : "back"}` : "Hand seen";
   while (history.length && now - history[0].t > WINDOW_MS) history.shift();
 
   const g = res.gestures?.[0]?.[0];
@@ -399,6 +425,14 @@ function trySwipe(now) {
   if (Math.abs(dx) >= need && Math.abs(dy) < 0.8 * Math.abs(dx)) dir = dx > 0 ? "left" : "right";
   else if (Math.abs(dy) >= need && Math.abs(dx) < 0.8 * Math.abs(dy)) dir = dy < 0 ? "up" : "down";
   if (!dir) return;
+  if (handRoles()) {
+    // Right hand only moves forward; left hand, palm to the camera, swiping right only goes back.
+    // Anything else (like a hand drifting back after a swipe) is ignored.
+    const hand = majority(history.map(h => h.hand));
+    const front = history.filter(h => h.front).length >= history.length / 2;
+    const ok = dir === "right" ? hand === "left" && front : hand === "right";
+    if (!ok) { history = []; return; }
+  }
   const opposite = { left: "right", right: "left", up: "down", down: "up" };
   if (lastDir && dir === opposite[lastDir] && now - lastDirAt < RECOIL_MS) { history = []; return; } // the hand coming back
   if (blanked) setBlank(false);

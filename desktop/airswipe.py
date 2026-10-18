@@ -34,7 +34,7 @@ import mediapipe as mp
 APP = "Air Swipe for PowerPoint"
 SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "AirSwipe")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
-DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "sensitivity": 3, "on_top": True, "camera": 0}
+DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "roles": True, "swap": False, "sensitivity": 3, "on_top": True, "camera": 0}
 SENS_DIST = [0.26, 0.21, 0.16, 0.12, 0.09]  # share of the camera picture the hand must travel
 SENS_LABELS = ["Very low", "Low", "Medium", "High", "Very high"]
 
@@ -128,6 +128,22 @@ def is_open_palm(lm):
     return fingers and thumb
 
 
+def which_hand(label, swap):
+    """MediaPipe labels hands as if the picture were mirrored; ours is not, so its "Left" is the presenter's right hand."""
+    h = {"Left": "right", "Right": "left"}.get(label)
+    if h and swap:
+        h = "left" if h == "right" else "right"
+    return h
+
+
+def palm_facing(lm, label):
+    """True when the palm (front of the hand) faces the camera, from the turn wrist -> index knuckle -> little-finger knuckle."""
+    ax, ay = lm[5].x - lm[0].x, lm[5].y - lm[0].y
+    bx, by = lm[17].x - lm[0].x, lm[17].y - lm[0].y
+    z = ax * by - ay * bx
+    return z < 0 if label == "Left" else z > 0
+
+
 class Engine:
     """Turns hand landmarks into key presses. All times in seconds."""
 
@@ -145,6 +161,7 @@ class Engine:
         self.last_seen = 0
         self.last_dir = None
         self.last_dir_at = 0
+        self.seen_hand = (None, False)
 
     def tap(self, key):
         try:
@@ -155,7 +172,7 @@ class Engine:
     def reset_single(self):
         self.history = []; self.hand_since = 0; self.hold_start = 0
 
-    def update(self, hands, now):
+    def update(self, hands, now, labels=None):
         s = self.app.settings
         if not s["gestures"]:
             self.reset_single(); self.zoom_ref = None
@@ -178,7 +195,11 @@ class Engine:
         if not self.hand_since:
             self.hand_since = now
         x, y = palm_centre(lm)
-        self.history.append((now, x, y))
+        label = (labels or [None])[0]
+        hand = which_hand(label, s["swap"])
+        front = palm_facing(lm, label) if hand else False
+        self.seen_hand = (hand, front)
+        self.history.append((now, x, y, hand, front))
         self.history = [h for h in self.history if now - h[0] <= WINDOW_S]
 
         # ---- open palm held still: black screen toggle
@@ -226,6 +247,16 @@ class Engine:
             direction = "up" if dy < 0 else "down"
         if not direction:
             return
+        if s["roles"]:
+            # Right hand only moves forward; only the left hand, palm to the camera, swiping right goes back.
+            # Anything else, like a hand drifting back after a swipe, is ignored.
+            hands_seen = [h[3] for h in self.history if h[3]]
+            hand = max(set(hands_seen), key=hands_seen.count) if hands_seen else None
+            front = sum(1 for h in self.history if h[4]) >= len(self.history) / 2
+            ok = (hand == "left" and front) if direction == "right" else (hand == "right")
+            if not ok:
+                self.history = []
+                return
         opposite = {"left": "right", "right": "left", "up": "down", "down": "up"}
         if self.last_dir and direction == opposite[self.last_dir] and now - self.last_dir_at < RECOIL_S:
             self.history = []  # that was the hand coming back, not a new swipe
@@ -303,7 +334,8 @@ class Camera(threading.Thread):
                 rgb.flags.writeable = False
                 res = tracker.process(rgb)
                 hands = [h.landmark for h in (res.multi_hand_landmarks or [])]
-                meter = self.app.engine.update(hands, time.monotonic())
+                labels = [h.classification[0].label for h in (res.multi_handedness or [])]
+                meter = self.app.engine.update(hands, time.monotonic(), labels)
                 # small mirrored preview for the window
                 preview = frame.copy()
                 for h in (res.multi_hand_landmarks or []):
@@ -360,7 +392,7 @@ class App:
         self.hint.pack(anchor="w", padx=14, pady=(0, 8))
 
         self.vars = {}
-        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
+        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right hand = next, left hand (palm out) = back"), ("swap", "Swap hands (left-handed, or wrong hand shown)"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
             v = tk.BooleanVar(value=self.settings[key]); self.vars[key] = v
             ttk.Checkbutton(self.root, text=label, variable=v, command=lambda k=key: self.toggle(k)).pack(anchor="w", padx=14)
 
@@ -372,7 +404,7 @@ class App:
         self.sens.set(self.settings["sensitivity"])
         self.sens.pack(fill="x", padx=14)
 
-        tk.Label(self.root, text="Swipe left, up or down: next  ·  Swipe right: back\nHold open palm 1 s: black screen  ·  Two hands: zoom",
+        tk.Label(self.root, text="Right hand swipe left, up or down: next\nLeft hand, palm out, swipe right: back\nHold open palm 1 s: black screen  ·  Two hands: zoom",
                  bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=14, pady=(8, 14))
 
         self.root.after(200, self.no_focus_steal)
@@ -444,7 +476,9 @@ class App:
             self.border.config(bg=(GOLD if seen else GREEN) if on else "#20372e")
             self.meter.coords(self.meter_bar, 0, 0, int(320 * meter), 4)
             if time.monotonic() > self.msg_until:
-                self.status.config(text=("Hand seen" if seen else "Watching for gestures") if on else "Gestures off (F9 to turn on)", fg="#eef4ef" if on else MUTED)
+                hand, front = self.engine.seen_hand
+                seen_txt = (f"{'Right' if hand == 'right' else 'Left'} hand · {'palm' if front else 'back'}" if hand else "Hand seen")
+                self.status.config(text=(seen_txt if seen else "Watching for gestures") if on else "Gestures off (F9 to turn on)", fg="#eef4ef" if on else MUTED)
         except queue.Empty:
             pass
         self.root.after(30, self.poll)
