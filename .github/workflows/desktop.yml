@@ -1,0 +1,47 @@
+name: Build Air Swipe for PowerPoint (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktop/requirements.txt pyinstaller==6.10.0
+
+      - name: Check the app starts its imports
+        run: python -c "import cv2, mediapipe, pynput, PIL; print('imports ok')"
+
+      - name: Build single-file app
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name AirSwipe
+          --collect-data mediapipe --collect-binaries mediapipe
+          --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32
+          desktop/airswipe.py
+
+      - name: Publish download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: airswipe-desktop
+          name: Air Swipe for PowerPoint (Windows)
+          body: |
+            Download **AirSwipe.exe**, then double-click it. No installation needed.
+            First run: if Windows says "Windows protected your PC", click **More info → Run anyway**.
+            Built from commit ${{ github.sha }}.
+          files: dist/AirSwipe.exe
+          make_latest: true
