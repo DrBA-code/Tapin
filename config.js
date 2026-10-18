@@ -3,5 +3,5 @@
 // Never put the service_role key here.
 window.TAPIN_CONFIG = {
   SUPABASE_URL: "https://ncfgthjozyombclfjxmk.supabase.co",
-  SUPABASE_ANON_KEY: "PASTE-ANON-PUBLIC-KEY-HERE"
+  SUPABASE_ANON_KEY: "sb_publishable_Y5xdRl5QmqUVYCTznlpKbg_HXx7JAT1"
 };
