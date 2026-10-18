@@ -36,6 +36,17 @@
       <div class="err" id="pinErr" role="alert"></div>
     </div>
 
+    <div class="panel" id="coordIn">
+      <h2>Programme coordinator</h2>
+      <p class="muted">Enter your programme's link code and your coordinator PIN to open its register.</p>
+      <form id="coordForm" class="row" novalidate>
+        <input type="text" id="cCode" autocomplete="off" placeholder="Link code, e.g. K7M2QX" aria-label="Link code" style="text-transform:uppercase;max-width:220px">
+        <input type="password" id="cPin" autocomplete="off" placeholder="Coordinator PIN" aria-label="Coordinator PIN">
+        <button class="btn" type="submit">Open register</button>
+      </form>
+      <div class="err" id="cErr" role="alert"></div>
+    </div>
+
     <div id="console" hidden>
       <div class="panel">
         <h2>Start a programme</h2>
@@ -44,6 +55,8 @@
           <label class="f full" for="newName">Programme name<input type="text" id="newName" placeholder="e.g. AI for Data, Research and Routine Work"></label>
           <label class="f" for="newCode">Programme code<input type="text" id="newCode" placeholder="e.g. PSSDC/AI/2026/01"></label>
           <label class="f" for="newCoord">Programme coordinator<input type="text" id="newCoord" placeholder="e.g. Dr. Babajide Arulogun"></label>
+          <label class="f" for="newCPin">Coordinator PIN<input type="text" id="newCPin" autocomplete="off" placeholder="At least 4 characters"></label>
+          <p class="muted small full">Give the coordinator this PIN and the coordinator link. They can open only this programme's register, screens and QR code.</p>
           <button class="btn full" type="submit">Open portal</button>
         </form>
         <div class="err" id="newErr" role="alert"></div>
@@ -156,12 +169,27 @@
     <div class="brand" data-logos></div>
     <div class="eyebrow">Attendance register</div>
     <h1 class="pagetitle" id="rTitle"></h1>
-    <div class="stats" id="rStats"></div>
-    <div class="row">
-      <button class="btn" id="csvBtn" type="button">Download register (Excel/CSV)</button>
-      <a class="btn ghost" href="#">Back to programmes</a>
+    <div class="panel" id="rSignin" hidden>
+      <h2>Coordinator sign-in</h2>
+      <p class="muted">Enter the coordinator PIN for this programme.</p>
+      <form id="rPinForm" class="row" novalidate>
+        <input type="password" id="rPin" autocomplete="off" placeholder="Coordinator PIN" aria-label="Coordinator PIN">
+        <button class="btn" type="submit">Open register</button>
+      </form>
+      <div class="err" id="rPinErr" role="alert"></div>
     </div>
-    <div class="tablewrap"><table class="reg" id="rTable"></table></div>
+    <div id="rBody" hidden>
+      <div class="stats" id="rStats"></div>
+      <div class="row">
+        <button class="btn" id="csvBtn" type="button">Download register (Excel/CSV)</button>
+        <a class="btn ghost" id="rDisplay" target="_blank" rel="noopener">Welcome screen</a>
+        <a class="btn ghost" id="rQr" target="_blank" rel="noopener">QR poster</a>
+        <button class="btn ghost" id="rStatus" type="button"></button>
+        <a class="btn ghost" id="rBack" href="#">Menu</a>
+      </div>
+      <div class="err" id="rMsg" role="status"></div>
+      <div class="tablewrap"><table class="reg" id="rTable"></table></div>
+    </div>
   </div>
 </section>
 

@@ -198,3 +198,6 @@ table.reg tr:last-child td{border-bottom:0}
 .grid2 .full{grid-column:1/-1}
 @media (max-width:560px){.grid2{grid-template-columns:1fr}}
 .edit{display:grid;gap:10px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+
+.small{font-size:13px}
+p.small{margin:0}

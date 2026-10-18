@@ -87,7 +87,7 @@
       if (token !== routeToken) return;
       const back = session.get("tapin_after");
       if (back) { session.del("tapin_after"); location.hash = back; return; }
-      $("signin").hidden = true; $("console").hidden = false;
+      $("signin").hidden = true; $("coordIn").hidden = true; $("console").hidden = false;
       loadProgrammes();
       const ch = sb.channel("home-" + Date.now())
         .on("postgres_changes", { event: "*", schema: "public", table: "programmes" }, () => loadProgrammes())
@@ -95,7 +95,7 @@
         .subscribe();
       cleanup.push(() => sb.removeChannel(ch));
     } else {
-      $("signin").hidden = false; $("console").hidden = true;
+      $("signin").hidden = false; $("coordIn").hidden = false; $("console").hidden = true;
     }
   }
 
@@ -107,17 +107,29 @@
     if (await verifyPin(p)) { session.set("tapin_pin", p); $("pin").value = ""; $("pinErr").textContent = ""; route(); }
     else $("pinErr").textContent = "That PIN is wrong.";
   });
+  $("coordForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const code = $("cCode").value.trim().toUpperCase(), p = $("cPin").value;
+    if (code.length < 4) return ($("cErr").textContent = "Enter your programme's link code.");
+    if (!p) return ($("cErr").textContent = "Enter your coordinator PIN.");
+    $("cErr").textContent = "Checking…";
+    const { data, error } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p });
+    if (error || !data) return ($("cErr").textContent = "That link code and PIN don't match a programme.");
+    session.set("tapin_cpin_" + code, p); $("cPin").value = ""; $("cErr").textContent = "";
+    location.hash = "#register/" + code;
+  });
   $("signOut").addEventListener("click", () => { session.del("tapin_pin"); route(); });
 
   $("newForm").addEventListener("submit", async e => {
     e.preventDefault();
-    const name = $("newName").value.trim(), pcode = $("newCode").value.trim(), coord = $("newCoord").value.trim();
+    const name = $("newName").value.trim(), pcode = $("newCode").value.trim(), coord = $("newCoord").value.trim(), cpin = $("newCPin").value.trim();
     const err = $("newErr");
     if (name.length < 3) return (err.textContent = "Enter the programme name.");
     if (pcode.length < 2) return (err.textContent = "Enter the programme code.");
     if (coord.length < 3) return (err.textContent = "Enter the programme coordinator's name.");
+    if (cpin.length < 4) return (err.textContent = "Set a coordinator PIN of at least 4 characters.");
     err.textContent = "Opening portal…";
-    const { error } = await sb.rpc("create_programme", { p_pin: pin(), p_name: name, p_programme_code: pcode, p_coordinator: coord });
+    const { error } = await sb.rpc("create_programme", { p_pin: pin(), p_name: name, p_programme_code: pcode, p_coordinator: coord, p_coordinator_pin: cpin });
     if (error) return (err.textContent = /PIN/.test(error.message) ? "Your session expired. Sign in again." : "Couldn't open the portal. Try again.");
     err.textContent = "Portal opened. Its QR code is below.";
     $("newForm").reset();
@@ -149,6 +161,7 @@
             <a class="btn small ghost" href="#register/${p.code}">Register</a>
             <a class="btn small ghost" href="#qr/${p.code}" target="_blank" rel="noopener">QR poster</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
+            <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
             <button class="btn small ghost" data-act="${p.status === "open" ? "close" : "reopen"}" type="button">${p.status === "open" ? "Close programme" : "Reopen"}</button>
           </div>
@@ -156,6 +169,7 @@
             <label class="f">Programme name<input type="text" name="name" value="${esc(p.name)}"></label>
             <label class="f">Programme code<input type="text" name="pcode" value="${esc(p.programme_code)}"></label>
             <label class="f">Programme coordinator<input type="text" name="coord" value="${esc(p.coordinator)}"></label>
+            <label class="f">New coordinator PIN<input type="text" name="cpin" autocomplete="off" placeholder="Leave blank to keep the current PIN"></label>
             <div class="row"><button class="btn small" type="submit">Save</button><button class="btn small ghost" data-act="cancel" type="button">Cancel</button></div>
           </form>
           <div class="err" role="status"></div>
@@ -172,6 +186,11 @@
       try { await navigator.clipboard.writeText(link); msg.textContent = "Check-in link copied."; }
       catch { msg.textContent = link; }
     }
+    if (act === "copycoord") {
+      const link = `${BASE}#register/${btn.dataset.code}`;
+      try { await navigator.clipboard.writeText(link); msg.textContent = "Coordinator link copied. Send it with their PIN."; }
+      catch { msg.textContent = link; }
+    }
     if (act === "edit") card.querySelector(".edit").hidden = false;
     if (act === "cancel") card.querySelector(".edit").hidden = true;
     if (act === "close" || act === "reopen") {
@@ -185,8 +204,15 @@
     e.preventDefault();
     const f = e.target, card = f.closest(".prog"), msg = card.querySelector(".err");
     const { error } = await sb.rpc("update_programme", { p_pin: pin(), p_id: card.dataset.id, p_name: f.name.value, p_programme_code: f.pcode.value, p_coordinator: f.coord.value });
-    msg.textContent = error ? "Couldn't save the changes." : "Saved.";
-    if (!error) loadProgrammes();
+    if (error) return (msg.textContent = "Couldn't save the changes.");
+    const np = f.cpin.value.trim();
+    if (np) {
+      if (np.length < 4) return (msg.textContent = "Details saved. The coordinator PIN must be at least 4 characters.");
+      const r = await sb.rpc("set_coordinator_pin", { p_pin: pin(), p_id: card.dataset.id, p_new_pin: np });
+      if (r.error) return (msg.textContent = "Details saved, but the coordinator PIN couldn't be changed.");
+    }
+    msg.textContent = np ? "Saved, including the new coordinator PIN." : "Saved.";
+    loadProgrammes();
   });
 
   // =====================================================================
@@ -492,21 +518,63 @@
   // =====================================================================
   // REGISTER (organiser)
   // =====================================================================
-  let rProg = null, rRows = [];
+  let rProg = null, rRows = [], rPin = "", rRole = null;
+  async function accessFor(code) {
+    if (pin() && await verifyPin(pin())) return { p: pin(), role: "organiser" };
+    const cp = session.get("tapin_cpin_" + code);
+    if (cp) {
+      const { data } = await sb.rpc("coordinator_check", { p_code: code, p_pin: cp });
+      if (data) return { p: cp, role: data };
+      session.del("tapin_cpin_" + code);
+    }
+    return null;
+  }
   async function openRegister(code, token) {
-    if (!(pin() && await verifyPin(pin()))) { session.set("tapin_after", "#register/" + code); location.hash = ""; return; }
-    if (token !== routeToken) return;
     show("register");
+    $("rSignin").hidden = true; $("rBody").hidden = true; $("rMsg").textContent = "";
     rProg = await getProgramme(code);
     if (token !== routeToken) return;
-    if (!rProg) { $("rTitle").textContent = "Programme not found"; $("rTable").innerHTML = ""; $("rStats").innerHTML = ""; return; }
+    if (!rProg) { $("rTitle").textContent = "Programme not found"; return; }
     $("rTitle").textContent = rProg.name;
+    const acc = await accessFor(code);
+    if (token !== routeToken) return;
+    if (!acc) { $("rSignin").hidden = false; $("rPin").focus(); return; }
+    rPin = acc.p; rRole = acc.role;
+    $("rBody").hidden = false;
+    $("rDisplay").href = "#display/" + rProg.code;
+    $("rQr").href = "#qr/" + rProg.code;
+    $("rBack").textContent = rRole === "organiser" ? "Back to programmes" : "Sign out";
+    setStatusBtn();
     await loadRegister();
     const ch = sb.channel("register-" + rProg.id)
       .on("postgres_changes", { event: "*", schema: "public", table: "checkins", filter: `programme_id=eq.${rProg.id}` }, () => loadRegister())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "programmes", filter: `id=eq.${rProg.id}` }, p => { rProg = { ...rProg, ...p.new }; setStatusBtn(); })
       .subscribe();
     cleanup.push(() => sb.removeChannel(ch));
   }
+  function setStatusBtn() {
+    const b = $("rStatus"); b.dataset.sure = "";
+    b.textContent = rProg.status === "open" ? "Close programme" : "Reopen programme";
+  }
+  $("rPinForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const p = $("rPin").value, code = rProg?.code;
+    if (!code || !p) return ($("rPinErr").textContent = "Enter the coordinator PIN.");
+    $("rPinErr").textContent = "Checking…";
+    const { data } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p });
+    if (!data) return ($("rPinErr").textContent = "That PIN is wrong for this programme.");
+    if (data === "organiser") session.set("tapin_pin", p); else session.set("tapin_cpin_" + code, p);
+    $("rPin").value = ""; $("rPinErr").textContent = "";
+    route();
+  });
+  $("rStatus").addEventListener("click", async () => {
+    const b = $("rStatus"), closing = rProg.status === "open";
+    if (closing && b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Tap again to close"; $("rMsg").textContent = "Closing stops new check-ins and tap-outs. The register is kept."; return; }
+    const { error } = await sb.rpc("set_programme_status", { p_pin: rPin, p_id: rProg.id, p_status: closing ? "closed" : "open" });
+    if (error) { $("rMsg").textContent = "Couldn't change the status."; return; }
+    rProg.status = closing ? "closed" : "open"; $("rMsg").textContent = closing ? "Programme closed." : "Programme reopened."; setStatusBtn();
+  });
+  $("rBack").addEventListener("click", () => { if (rRole === "coordinator" && rProg) session.del("tapin_cpin_" + rProg.code); });
   async function loadRegister() {
     const { data } = await sb.from("checkins").select("id,title,name,mda,photo_url,arrived_at,tap_out_at")
       .eq("programme_id", rProg.id).order("arrived_at", { ascending: true }).limit(5000);
