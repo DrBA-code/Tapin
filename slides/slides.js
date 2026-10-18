@@ -64,13 +64,14 @@ async function loadFiles(files) {
   }
 }
 
-async function renderPage(n, targetHeight, isThumb = false) {
+async function renderPage(n, targetHeight, isThumb = false, factor = 1) {
   const dprI = Math.min(window.devicePixelRatio || 1, 2);
   if (deck.kind === "images") {
     const img = deck.imgs[n - 1], c = document.createElement("canvas");
-    const scale = isThumb ? (targetHeight * dprI) / img.naturalHeight : Math.min(innerWidth / img.naturalWidth, innerHeight / img.naturalHeight) * dprI;
+    const fit = isThumb ? (targetHeight * dprI) / img.naturalHeight : Math.min(innerWidth / img.naturalWidth, innerHeight / img.naturalHeight) * dprI;
+    const scale = Math.min(fit * factor, Math.max(fit, 1)); // pictures can't gain detail beyond their own pixels
     c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
-    if (!isThumb) { c.style.width = c.width / dprI + "px"; c.style.height = c.height / dprI + "px"; }
+    if (!isThumb) { c.style.width = img.naturalWidth * fit / dprI + "px"; c.style.height = img.naturalHeight * fit / dprI + "px"; }
     const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, c.width, c.height);
     return c;
   }
@@ -80,10 +81,12 @@ async function renderPage(n, targetHeight, isThumb = false) {
   let scale;
   if (isThumb) scale = (targetHeight * dpr) / base.height;
   else scale = Math.min(innerWidth / base.width, innerHeight / base.height) * dpr;
+  const cssW = base.width * scale / dpr, cssH = base.height * scale / dpr;
+  if (!isThumb && factor > 1) scale *= Math.min(factor, 6000 / (base.width * scale)); // cap memory
   const vp = p.getViewport({ scale });
   const c = document.createElement("canvas");
   c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-  if (!isThumb) { c.style.width = vp.width / dpr + "px"; c.style.height = vp.height / dpr + "px"; }
+  if (!isThumb) { c.style.width = cssW + "px"; c.style.height = cssH + "px"; }
   await p.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
   return c;
 }
@@ -130,6 +133,47 @@ function swoosh(kind) {
   src.start(t, Math.random() * 0.3); src.stop(t + dur + 0.02);
 }
 
+// ---------------- hand zoom ----------------
+let zoom = 1, tx = 0, ty = 0, zoomGesture = null, pinchPrev = null, sharpTimer = null, zoomCooldown = 0;
+const zoomOn = () => $("zoomOpt").checked;
+try { const v = localStorage.getItem("airswipe_zoom"); if (v !== null) $("zoomOpt").checked = v === "1"; } catch {}
+$("zoomOpt").addEventListener("change", () => { try { localStorage.setItem("airswipe_zoom", zoomOn() ? "1" : "0"); } catch {} syncZoomBtn(); if (!zoomOn()) resetZoom(); });
+function syncZoomBtn() { const b = $("bZoom"); b.setAttribute("aria-pressed", zoomOn()); b.textContent = zoomOn() ? "Hand zoom on" : "Hand zoom off"; }
+syncZoomBtn();
+function toggleZoom() { $("zoomOpt").checked = !zoomOn(); $("zoomOpt").dispatchEvent(new Event("change")); flash(zoomOn() ? "Zoom on" : "Zoom off"); }
+
+function slideEl() { return $("slideWrap").querySelector("canvas"); }
+function applyZoom(smooth = false) {
+  const c = slideEl(); if (!c) return;
+  const w = parseFloat(c.style.width) || c.clientWidth, h = parseFloat(c.style.height) || c.clientHeight;
+  const maxX = Math.max(0, (w * zoom - w) / 2), maxY = Math.max(0, (h * zoom - h) / 2); // can reach every edge of the slide
+  tx = Math.max(-maxX, Math.min(maxX, tx)); ty = Math.max(-maxY, Math.min(maxY, ty));
+  c.classList.remove("enter-next", "enter-prev");
+  c.style.transition = smooth ? "transform .35s cubic-bezier(.2,.8,.2,1)" : "none";
+  c.style.transform = zoom === 1 && tx === 0 && ty === 0 ? "" : `translate(${tx}px,${ty}px) scale(${zoom})`;
+  $("count").textContent = zoom > 1.01 ? `${page} / ${total} · ×${zoom.toFixed(1)}` : `${page} / ${total}`;
+  clearTimeout(sharpTimer);
+  if (zoom > 1.2) sharpTimer = setTimeout(sharpen, 350);
+}
+// Zoom about a focal point given relative to the screen centre.
+function zoomTo(z, fx, fy) {
+  z = Math.max(1, Math.min(5, z));
+  if (z < 1.04) { z = 1; tx = 0; ty = 0; }
+  else { tx = fx - (fx - tx) * (z / zoom); ty = fy - (fy - ty) * (z / zoom); }
+  zoom = z; applyZoom();
+}
+function resetZoom() { zoom = 1; tx = 0; ty = 0; zoomGesture = null; pinchPrev = null; applyZoom(true); }
+let sharpFor = 0;
+async function sharpen() {
+  if (!deck || zoom <= 1.2) return;
+  const want = Math.round(zoom * 2) / 2; if (want === sharpFor) return;
+  const n = page, c = await renderPage(n, 0, false, want);
+  if (n !== page || Math.abs(zoom - want) > 1.5) return;
+  const old = slideEl(); if (!old) return;
+  c.style.transform = old.style.transform; c.style.transition = "none";
+  old.replaceWith(c); sharpFor = want;
+}
+
 // ---------------- presenting ----------------
 $("startBtn").addEventListener("click", start);
 async function start() {
@@ -155,11 +199,12 @@ async function go(n, dir) {
   if (!deck) return;
   n = Math.max(1, Math.min(total, n));
   if (n === page && dir !== 0) { flash(dir > 0 ? "End" : "Start"); return; }
-  page = n;
+  page = n; zoom = 1; tx = 0; ty = 0; sharpFor = 0; zoomGesture = null; pinchPrev = null;
   const c = await slideCanvas(n);
   if (n !== page) return;
   const wrap = $("slideWrap");
   wrap.innerHTML = "";
+  c.style.transform = ""; c.style.transition = "none";
   if (!reduced && dir) c.className = dir > 0 ? "enter-next" : "enter-prev"; else c.className = "";
   wrap.appendChild(c);
   $("count").textContent = `${page} / ${total}`;
@@ -188,6 +233,7 @@ $("bGest").addEventListener("click", toggleGestures);
 $("bCam").addEventListener("click", toggleCamPreview);
 $("bFs").addEventListener("click", async () => { try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch {} });
 $("bExit").addEventListener("click", exit);
+$("bZoom").addEventListener("click", toggleZoom);
 function toggleGestures() {
   gesturesOn = !gesturesOn;
   $("bGest").setAttribute("aria-pressed", gesturesOn); $("bGest").textContent = gesturesOn ? "Gestures on" : "Gestures off";
@@ -200,12 +246,21 @@ function toggleCamPreview() {
 }
 addEventListener("keydown", e => {
   if ($("stage").hidden) return;
+  if (zoom > 1 && ["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(e.key)) {
+    e.preventDefault(); const st = 120;
+    if (e.key === "ArrowRight") tx -= st; if (e.key === "ArrowLeft") tx += st; if (e.key === "ArrowDown") ty -= st; if (e.key === "ArrowUp") ty += st;
+    applyZoom(true); return;
+  }
   if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); next(); }
   else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); prev(); }
   else if (e.key === "b" || e.key === "B" || e.key === ".") setBlank(!blanked);
   else if (e.key === "g" || e.key === "G") toggleGestures();
   else if (e.key === "c" || e.key === "C") toggleCamPreview();
   else if (e.key === "s" || e.key === "S") { $("sound").checked = !soundOn(); $("sound").dispatchEvent(new Event("change")); flash(soundOn() ? "🔊" : "🔇"); }
+  else if (e.key === "z" || e.key === "Z") toggleZoom();
+  else if (e.key === "r" || e.key === "R" || e.key === "0") resetZoom();
+  else if (e.key === "+" || e.key === "=") zoomTo(zoom * 1.25, 0, 0);
+  else if (e.key === "-" || e.key === "_") zoomTo(zoom / 1.25, 0, 0);
   else if (e.key === "Home") go(1, -1);
   else if (e.key === "End") go(total, 1);
   else if (e.key === "Escape" && !document.fullscreenElement) exit();
@@ -238,9 +293,9 @@ async function startTracking() {
     try {
       const fileset = await FilesetResolver.forVisionTasks(WASM);
       try {
-        recognizer = await GestureRecognizer.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
+        recognizer = await GestureRecognizer.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 2 });
       } catch {
-        recognizer = await GestureRecognizer.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL, delegate: "CPU" }, runningMode: "VIDEO", numHands: 1 });
+        recognizer = await GestureRecognizer.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL, delegate: "CPU" }, runningMode: "VIDEO", numHands: 2 });
       }
     } catch (e) {
       console.error(e);
@@ -269,8 +324,16 @@ function loop() {
   lastVideoTime = v.currentTime; lastProcess = now;
   let res;
   try { res = recognizer.recognizeForVideo(v, now); } catch { return; }
-  const lm = res.landmarks?.[0];
-  draw(lm);
+  const hands = res.landmarks || [];
+  const lm = hands[0];
+  draw(hands);
+  if (gesturesOn && zoomOn() && hands.length === 2) {
+    $("cam").classList.add("hot");
+    history = []; handSince = 0; holdStart = 0; setMeter(0); pinchPrev = null;
+    twoHandZoom(hands, now);
+    return;
+  }
+  zoomGesture = null;
   if (!lm) { history = []; handSince = 0; holdStart = 0; holdLatched = false; setMeter(0); $("cam").classList.remove("hot"); return; }
   $("cam").classList.add("hot");
   if (!handSince) handSince = now;
@@ -284,6 +347,19 @@ function loop() {
   const palm = g && g.categoryName === "Open_Palm" && g.score > 0.6;
 
   if (!gesturesOn) return;
+
+  // While zoomed: pinch (thumb to index finger) and drag to move around; swipes and pause are paused.
+  if (zoom > 1) {
+    const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.1;
+    const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / handSize < 0.35;
+    if (pinch && zoomOn()) {
+      const p = { x: (1 - (lm[4].x + lm[8].x) / 2) * innerWidth, y: ((lm[4].y + lm[8].y) / 2) * innerHeight };
+      if (pinchPrev) { tx += (p.x - pinchPrev.x) * 1.8; ty += (p.y - pinchPrev.y) * 1.8; applyZoom(); }
+      pinchPrev = p;
+    } else pinchPrev = null;
+    history = []; holdStart = 0; setMeter(0);
+    return;
+  }
 
   // Palm hold (still, open palm) toggles the pause screen.
   const recent = history.filter(h => now - h.t < 500);
@@ -314,15 +390,32 @@ function loop() {
     cooldownUntil = now + COOLDOWN_MS; history = []; holdStart = 0;
   }
 }
+function twoHandZoom(hands, now) {
+  const centre = lm => { const pts = [0, 5, 9, 13, 17].map(i => lm[i]); return { x: 1 - pts.reduce((a, p) => a + p.x, 0) / 5, y: pts.reduce((a, p) => a + p.y, 0) / 5 }; };
+  const a = centre(hands[0]), b = centre(hands[1]);
+  const d = Math.hypot(a.x - b.x, (a.y - b.y) * 0.75);
+  const fx = ((a.x + b.x) / 2 - 0.5) * innerWidth, fy = ((a.y + b.y) / 2 - 0.5) * innerHeight;
+  if (now < zoomCooldown) return;
+  // Clap: hands meet -> back to full view.
+  if (d < 0.08) {
+    if (zoom > 1) { resetZoom(); swoosh("prev"); flash("⤢"); }
+    zoomGesture = null; zoomCooldown = now + 800; return;
+  }
+  if (!zoomGesture) { zoomGesture = { since: now, d0: d, z0: zoom }; return; }
+  if (now - zoomGesture.since < 200) { zoomGesture.d0 = d; zoomGesture.z0 = zoom; return; } // let both hands settle
+  zoomTo(zoomGesture.z0 * (d / zoomGesture.d0), fx, fy);
+}
 function setMeter(p) { $("meter").style.width = (p * 100).toFixed(0) + "%"; }
 
 const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-function draw(lm) {
+function draw(hands) {
   const c = $("overlay"), v = $("video");
   if (c.width !== v.videoWidth) { c.width = v.videoWidth || 640; c.height = v.videoHeight || 480; }
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
-  if (!lm) return;
+  hands.forEach(lm => drawHand(ctx, c, lm));
+}
+function drawHand(ctx, c, lm) {
   ctx.strokeStyle = "rgba(63,185,138,.9)"; ctx.lineWidth = 3; ctx.beginPath();
   BONES.forEach(([a, b]) => { ctx.moveTo(lm[a].x * c.width, lm[a].y * c.height); ctx.lineTo(lm[b].x * c.width, lm[b].y * c.height); });
   ctx.stroke();
