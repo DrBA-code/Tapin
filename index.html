@@ -4,120 +4,177 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tap-In Welcome</title>
-<meta name="description" content="Entrance check-in and big-screen welcome for PSSDC training programmes.">
+<meta name="description" content="Programme check-in, tap-out and big-screen welcome for PSSDC training programmes.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<!-- MENU -->
+<template id="logosTpl">
+  <div class="logos">
+    <img src="assets/pssdc-logo.png" alt="PSSDC" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+    <img src="assets/lagos-logo.png" alt="Lagos State Government" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+  </div>
+</template>
+
+<!-- ORGANISER HOME -->
 <section id="home" hidden>
   <div class="wrap">
-    <div class="eyebrow">PSSDC · Training suite · Feature 1</div>
-    <h1 style="font-size:clamp(32px,7vw,52px);margin-top:10px">Tap-In Welcome</h1>
-    <p class="muted" style="max-width:60ch">Attendees scan the QR code, enter their title, name and MDA, and the camera takes their photo as they submit. The big screen greets each one by name, then files them into the numbered arrival list with the time they came in.</p>
+    <div class="brand" data-logos></div>
+    <div class="eyebrow">PSSDC · Training suite</div>
+    <h1 class="pagetitle">Tap-In Welcome</h1>
     <p class="notice bad" id="cfgNote" hidden></p>
-    <div class="modes">
-      <div class="mode">
-        <div class="eyebrow">Attendee phones or door tablet</div>
-        <h2>Check-in</h2>
-        <p class="muted">The form attendees fill when they arrive.</p>
-        <a class="btn" href="#kiosk">Open check-in</a>
-      </div>
-      <div class="mode">
-        <div class="eyebrow">Projector or TV</div>
-        <h2>Welcome screen</h2>
-        <p class="muted">Open on the laptop connected to the projector. New arrivals appear live.</p>
-        <a class="btn" href="#display">Open welcome screen</a>
-      </div>
+
+    <div class="panel" id="signin">
+      <h2>Organiser sign-in</h2>
+      <p class="muted">Attendees don't need this page. They scan the QR code for their programme.</p>
+      <form id="pinForm" class="row" novalidate>
+        <input type="password" id="pin" autocomplete="current-password" placeholder="Organiser PIN" aria-label="Organiser PIN">
+        <button class="btn" type="submit">Sign in</button>
+      </form>
+      <div class="err" id="pinErr" role="alert"></div>
     </div>
-    <div class="qrbox">
-      <div class="qr" id="qrHome"></div>
-      <div style="display:grid;gap:6px;min-width:0">
-        <div class="eyebrow">Check-in QR code</div>
-        <p style="margin:0">Print this or show it at the entrance. It opens the check-in form.</p>
-        <code id="kioskUrl"></code>
+
+    <div id="console" hidden>
+      <div class="panel">
+        <h2>Start a programme</h2>
+        <p class="muted">Each programme gets its own check-in QR code, welcome screen and register.</p>
+        <form id="newForm" class="grid2" novalidate>
+          <label class="f full" for="newName">Programme name<input type="text" id="newName" placeholder="e.g. AI for Data, Research and Routine Work"></label>
+          <label class="f" for="newCode">Programme code<input type="text" id="newCode" placeholder="e.g. PSSDC/AI/2026/01"></label>
+          <label class="f" for="newCoord">Programme coordinator<input type="text" id="newCoord" placeholder="e.g. Dr. Babajide Arulogun"></label>
+          <button class="btn full" type="submit">Open portal</button>
+        </form>
+        <div class="err" id="newErr" role="alert"></div>
       </div>
-    </div>
-    <div class="admin">
-      <h3 style="font-size:20px">Organiser</h3>
-      <label class="f" for="pin">Organiser PIN<input type="password" id="pin" autocomplete="off" placeholder="The PIN set in the database setup"></label>
-      <label class="f" for="evName">Programme name shown on the screen
-        <div class="row"><input type="text" id="evName" placeholder="e.g. AI for Data, Research and Routine Work"><button class="btn ghost" id="evSave" type="button">Save</button></div>
-      </label>
-      <div class="row"><span class="muted" id="countLine">0 checked in</span><button class="btn ghost" id="resetBtn" type="button">Clear all check-ins</button></div>
-      <div class="confirm" id="resetConfirm" hidden><span>Delete every check-in for this session? This cannot be undone.</span><button class="btn danger" id="resetYes" type="button">Delete all</button><button class="btn ghost" id="resetNo" type="button">Cancel</button></div>
-      <div class="err" id="adminMsg" role="status"></div>
+      <div class="listhead"><h2>Programmes</h2><button class="btn ghost small" id="signOut" type="button">Sign out</button></div>
+      <div id="progList" class="proglist"></div>
     </div>
   </div>
 </section>
 
-<!-- KIOSK -->
+<!-- KIOSK (attendee phone or door tablet) -->
 <section id="kiosk" hidden>
   <div class="wrap">
-    <div class="head">
-      <div><div class="eyebrow" id="kEvent">Welcome</div><h1>Check in</h1></div>
+    <div class="brand" data-logos></div>
+    <div id="kNoProg" hidden>
+      <h1 class="pagetitle">Ẹ káàbọ̀</h1>
+      <p class="muted" id="kNoProgMsg">Scan the QR code for your programme to check in.</p>
     </div>
-    <form id="ciForm" novalidate>
-      <div class="f" role="group" aria-labelledby="tLbl"><span id="tLbl">Title</span>
-        <div class="titles" id="titles"></div>
+    <div id="kMain" hidden>
+      <div class="eyebrow" id="kEvent"></div>
+      <h1 class="pagetitle">Ẹ káàbọ̀ <span class="sub">You are welcome</span></h1>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabIn" aria-selected="true" type="button">Tap in</button>
+        <button role="tab" id="tabOut" aria-selected="false" type="button">Tap out</button>
       </div>
-      <label class="f" for="fName">Full name<input type="text" id="fName" autocomplete="name" placeholder="e.g. Babajide Arulogun"></label>
-      <label class="f" for="fMda">MDA<input type="text" id="fMda" list="mdaList" autocomplete="organization" placeholder="Ministry, Department or Agency"></label>
-      <datalist id="mdaList">
-        <option value="Public Service Staff Development Centre (PSSDC)"><option value="Civil Service Commission"><option value="Office of Establishments and Training"><option value="Ministry of Establishments and Training"><option value="Ministry of Education"><option value="Ministry of Health"><option value="Ministry of Finance"><option value="Ministry of Economic Planning and Budget"><option value="Ministry of Science and Technology"><option value="Office of the Head of Service"><option value="Teaching Service Commission (TESCOM)">
-      </datalist>
-      <div class="f"><span>Your photo</span>
-        <div class="cam">
-          <div class="ring" id="ring"><span id="camMsg">Starting camera…</span><video id="video" playsinline muted autoplay hidden></video><img id="still" alt="Your photo" hidden></div>
-          <div style="display:grid;gap:8px;min-width:0;flex:1">
-            <span class="muted" id="camHint" style="font-weight:400">Look at the camera. Your photo is taken when you tap Check me in.</span>
-            <button class="btn ghost" id="camStart" type="button" hidden>Turn on camera</button>
-            <label class="btn ghost" for="fPhoto" id="pickLbl" hidden style="cursor:pointer">Take photo instead</label>
-            <input type="file" id="fPhoto" accept="image/*" capture="user" hidden>
+
+      <form id="ciForm" novalidate>
+        <div class="f" role="group" aria-labelledby="tLbl"><span id="tLbl">Title</span>
+          <div class="titles" id="titles"></div>
+        </div>
+        <label class="f" for="fName">Full name<input type="text" id="fName" autocomplete="name" placeholder="e.g. Babajide Arulogun"></label>
+        <label class="f" for="fMda">MDA<input type="text" id="fMda" list="mdaList" autocomplete="organization" placeholder="Ministry, Department or Agency"></label>
+        <datalist id="mdaList">
+          <option value="Public Service Staff Development Centre (PSSDC)"><option value="Civil Service Commission"><option value="Office of Establishments and Training"><option value="Ministry of Establishments and Training"><option value="Ministry of Education"><option value="Ministry of Health"><option value="Ministry of Finance"><option value="Ministry of Economic Planning and Budget"><option value="Ministry of Science and Technology"><option value="Office of the Head of Service"><option value="Teaching Service Commission (TESCOM)">
+        </datalist>
+        <div class="f"><span>Your photo</span>
+          <div class="cam">
+            <div class="ring" id="ring"><span id="camMsg">Starting camera…</span><video id="video" playsinline muted autoplay hidden></video><img id="still" alt="Your photo" hidden></div>
+            <div class="camside">
+              <span class="muted" id="camHint">Look at the camera. Your photo is taken when you tap Check me in.</span>
+              <button class="btn ghost" id="camStart" type="button" hidden>Turn on camera</button>
+              <label class="btn ghost" for="fPhoto" id="pickLbl" hidden>Take photo instead</label>
+              <input type="file" id="fPhoto" accept="image/*" capture="user" hidden>
+            </div>
           </div>
         </div>
+        <label class="consent" for="fConsent"><input type="checkbox" id="fConsent"> <span>I agree that my name, MDA and photo will be shown on the welcome screen and kept in the attendance register for this programme.</span></label>
+        <div class="err" id="ciErr" role="alert"></div>
+        <button class="btn big" id="ciSubmit" type="submit">Check me in</button>
+      </form>
+
+      <div id="outPanel" hidden>
+        <div id="outMine" hidden class="panel">
+          <div class="mine"><img id="outMineImg" alt=""><div><div class="nm" id="outMineName"></div><div class="muted" id="outMineIn"></div></div></div>
+          <button class="btn big" id="outMineBtn" type="button">Tap me out</button>
+          <button class="linkbtn" id="outNotMe" type="button">This isn't me</button>
+        </div>
+        <div id="outSearch">
+          <label class="f" for="outQ">Find your name<input type="text" id="outQ" autocomplete="off" placeholder="Type at least 3 letters of your name"></label>
+          <div id="outResults" class="results"></div>
+        </div>
+        <div class="err" id="outErr" role="alert"></div>
       </div>
-      <label class="consent" for="fConsent"><input type="checkbox" id="fConsent"> <span>I agree that my name, MDA and photo will be shown on the welcome screen and kept in the attendance record for this programme.</span></label>
-      <div class="err" id="ciErr" role="alert"></div>
-      <button class="btn" id="ciSubmit" type="submit" style="padding:18px;font-size:18px">Check me in</button>
-    </form>
-    <div class="done" id="ciDone" hidden>
-      <img id="doneImg" alt="">
-      <div class="eyebrow">You're checked in</div>
-      <h2 id="doneName"></h2>
-      <p class="muted" id="doneMsg">Look up at the screen.</p>
-      <button class="btn ghost" id="nextBtn" type="button">Check in another person</button>
+
+      <div class="done" id="ciDone" hidden>
+        <img id="doneImg" alt="">
+        <div class="eyebrow" id="doneEyebrow">You're checked in</div>
+        <h2 id="doneName"></h2>
+        <p class="muted" id="doneMsg">Look up at the screen.</p>
+        <button class="btn ghost" id="nextBtn" type="button">Next person</button>
+      </div>
     </div>
   </div>
   <div class="flash" id="flash"></div>
 </section>
 
-<!-- DISPLAY -->
+<!-- DISPLAY (projector) -->
 <section id="display" hidden>
   <div class="bar">
-    <div>
-      <div class="meta" id="dDate"></div>
-      <h1 id="dEvent">Welcome</h1>
+    <div class="barleft">
+      <div class="stagelogos" data-logos></div>
+      <div class="bartitle">
+        <div class="meta" id="dDate"></div>
+        <h1 id="dEvent"></h1>
+      </div>
     </div>
     <div class="right">
       <div class="scan"><div class="qr" id="qrBar"></div><span>Scan to check in</span></div>
-      <div class="count" id="dCount">0<small>checked in</small></div>
-      <div class="tools"><button id="demoBtn" type="button">Preview welcome</button><button id="fsBtn" type="button">Full screen</button><button id="backBtn" type="button">Menu</button></div>
+      <div class="count"><span id="dCount">0</span><small>checked in</small></div>
+      <div class="count out"><span id="dOut">0</span><small>tapped out</small></div>
+      <div class="tools"><button id="demoBtn" type="button">Preview</button><button id="fsBtn" type="button">Full screen</button></div>
     </div>
   </div>
   <div id="roll" aria-live="polite"></div>
   <div id="welcome" hidden>
     <div class="card">
       <div class="big" id="wBig"></div>
-      <div class="hello">Welcome</div>
+      <div class="hello" id="wHello"><span lang="yo">Ẹ káàbọ̀</span><span class="en">You are welcome</span></div>
       <div class="name" id="wName"></div>
       <div class="mda" id="wMda"></div>
       <div class="num" id="wNum"></div>
     </div>
   </div>
   <div class="status" id="dNote" hidden></div>
+</section>
+
+<!-- REGISTER (organiser) -->
+<section id="register" hidden>
+  <div class="wrap wide">
+    <div class="brand" data-logos></div>
+    <div class="eyebrow">Attendance register</div>
+    <h1 class="pagetitle" id="rTitle"></h1>
+    <div class="stats" id="rStats"></div>
+    <div class="row">
+      <button class="btn" id="csvBtn" type="button">Download register (Excel/CSV)</button>
+      <a class="btn ghost" href="#">Back to programmes</a>
+    </div>
+    <div class="tablewrap"><table class="reg" id="rTable"></table></div>
+  </div>
+</section>
+
+<!-- QR POSTER -->
+<section id="qrpage" hidden>
+  <div class="poster">
+    <div class="brand center" data-logos></div>
+    <div class="eyebrow">Scan to check in</div>
+    <h1 id="qTitle"></h1>
+    <div class="qr bigqr" id="qrBig"></div>
+    <p><span lang="yo">Ẹ káàbọ̀</span> · You are welcome</p>
+    <code id="qUrl"></code>
+  </div>
 </section>
 
 <script src="config.js"></script>

@@ -2,15 +2,18 @@
 
 Entrance check-in and big-screen welcome for PSSDC training programmes. Feature 1 of the gesture training suite.
 
-- **Check-in** (`/#kiosk`): attendee picks a title (Prof, Dr, Mr, Mrs, Miss), enters name and MDA; the camera snaps their photo when they tap *Check me in*.
-- **Welcome screen** (`/#display`): greets each new arrival full-screen with their portrait, then files them into a numbered arrival list with the time.
-- **Menu** (`/`): links, the check-in QR code, and organiser controls (programme name, clear list) protected by a PIN.
+- **Programmes:** the organiser signs in with the PIN and opens a portal per programme (name, programme code, coordinator). Each gets its own QR code, welcome screen and register.
+- **Check-in / tap-out** (`/#kiosk/CODE`): attendee picks a title (Prof, Dr, Mr, Mrs, Miss), enters name and MDA; the camera snaps their photo when they tap *Check me in*.
+- **Welcome screen** (`/#display/CODE`): greets each arrival with *Ẹ káàbọ̀ / You are welcome* and each departure with *Ó dàbọ̀ / Goodbye*, then files them into the numbered list.
+- **Register** (`/#register/CODE`): attendance with time in, time out and duration; downloads as CSV for Excel.
+- **QR poster** (`/#qr/CODE`): full-screen QR code to project or print.
+- **Logos:** add `assets/pssdc-logo.png` and `assets/lagos-logo.png`; they show at the top left of every screen.
 
 Static site (no build step) hosted on Vercel; data and photos in Supabase.
 
 ## Setup
 
-1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it.
+1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it. Then run `supabase/upgrade-2-programmes.sql` the same way.
 2. **Key:** put the project's *anon public* key in `config.js` (Supabase → Project Settings → API). Never use the `service_role` key.
 3. **Hosting:** Vercel deploys automatically from the `main` branch. Framework preset: *Other*; no build command.
 
