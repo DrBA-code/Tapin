@@ -35,10 +35,12 @@ APP = "Air Swipe for PowerPoint"
 SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "AirSwipe")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "sensitivity": 3, "on_top": True, "camera": 0}
-SENS_DIST = [0.30, 0.25, 0.20, 0.16, 0.12]  # share of the camera picture the hand must travel
+SENS_DIST = [0.26, 0.21, 0.16, 0.12, 0.09]  # share of the camera picture the hand must travel
 SENS_LABELS = ["Very low", "Low", "Medium", "High", "Very high"]
 
-WINDOW_S, COOLDOWN_S, HOLD_S, SETTLE_S = 0.45, 0.9, 1.0, 0.25
+WINDOW_S, COOLDOWN_S, HOLD_S, SETTLE_S = 0.6, 0.7, 1.0, 0.2
+DROPOUT_S = 0.3      # a fast swipe blurs the hand for a few frames; don't forget it straight away
+RECOIL_S = 1.3       # after a swipe, ignore the hand travelling back the other way
 VK_ADD, VK_SUBTRACT = 0x6B, 0x6D  # numeric keypad + and -, which PowerPoint's slide show uses for zoom
 
 GREEN, GOLD, DARK, MUTED = "#3fb98a", "#e8b44a", "#0b1612", "#8fa69b"
@@ -140,6 +142,9 @@ class Engine:
         self.zoom_ref = None
         self.zoom_steps = 0
         self.blank = False
+        self.last_seen = 0
+        self.last_dir = None
+        self.last_dir_at = 0
 
     def tap(self, key):
         try:
@@ -161,9 +166,15 @@ class Engine:
             return self.two_hands(hands, now)
         self.zoom_ref = None
         if not hands:
+            # Fast movement often loses the hand for a few frames, or it leaves the picture at the end of a swipe.
+            # Judge the swipe on what was already seen before forgetting it.
+            if self.history and now - self.last_seen < DROPOUT_S:
+                self.try_swipe(now)
+                return 0.0
             self.reset_single(); self.hold_latched = False
             return 0.0
         lm = hands[0]
+        self.last_seen = now
         if not self.hand_since:
             self.hand_since = now
         x, y = palm_centre(lm)
@@ -193,33 +204,46 @@ class Engine:
                 self.hold_latched = False
 
         # ---- swipes
-        if now < self.cooldown_until or len(self.history) < 4 or now - self.hand_since < SETTLE_S:
-            return meter
-        _, x0, y0 = self.history[0]
-        _, x1, y1 = self.history[-1]
-        dx, dy = x1 - x0, y1 - y0
+        self.try_swipe(now)
+        return meter
+
+    def try_swipe(self, now):
+        s = self.app.settings
+        if now < self.cooldown_until or len(self.history) < 3 or (self.hand_since and now - self.hand_since < SETTLE_S):
+            return
+        # Use the largest travel inside the window, not just first-to-last, so a swipe that curves back still counts.
+        xs = [h[1] for h in self.history]; ys = [h[2] for h in self.history]
+        i_min_x, i_max_x = xs.index(min(xs)), xs.index(max(xs))
+        i_min_y, i_max_y = ys.index(min(ys)), ys.index(max(ys))
+        dx = (max(xs) - min(xs)) * (1 if i_max_x > i_min_x else -1)
+        dy = (max(ys) - min(ys)) * (1 if i_max_y > i_min_y else -1)
         need = SENS_DIST[s["sensitivity"] - 1]
         direction = None
-        if abs(dx) >= need and abs(dy) < 0.7 * abs(dx):
+        if abs(dx) >= need and abs(dy) < 0.8 * abs(dx):
             # The camera picture is not mirrored: moving to the presenter's left moves right in the picture.
             direction = "left" if dx > 0 else "right"
-        elif abs(dy) >= need and abs(dx) < 0.7 * abs(dy):
+        elif abs(dy) >= need and abs(dx) < 0.8 * abs(dy):
             direction = "up" if dy < 0 else "down"
-        if direction:
-            if self.blank:
-                self.blank = False
-                self.tap("b")
-                self.app.event("pause", "Slide back")
-            elif direction == "right":
-                self.tap(keyboard.Key.left)
-                self.app.event("prev", "◀ Previous")
-            else:
-                self.tap(keyboard.Key.right)
-                self.app.event("next", {"left": "Next ▶", "up": "Next ▲", "down": "Next ▼"}[direction])
-            self.cooldown_until = now + COOLDOWN_S
-            self.history = []
-            self.hold_start = 0
-        return meter
+        if not direction:
+            return
+        opposite = {"left": "right", "right": "left", "up": "down", "down": "up"}
+        if self.last_dir and direction == opposite[self.last_dir] and now - self.last_dir_at < RECOIL_S:
+            self.history = []  # that was the hand coming back, not a new swipe
+            return
+        if self.blank:
+            self.blank = False
+            self.tap("b")
+            self.app.event("pause", "Slide back")
+        elif direction == "right":
+            self.tap(keyboard.Key.left)
+            self.app.event("prev", "◀ Previous")
+        else:
+            self.tap(keyboard.Key.right)
+            self.app.event("next", {"left": "Next ▶", "up": "Next ▲", "down": "Next ▼"}[direction])
+        self.last_dir, self.last_dir_at = direction, now
+        self.cooldown_until = now + COOLDOWN_S
+        self.history = []
+        self.hold_start = 0
 
     def two_hands(self, hands, now):
         (ax, ay), (bx, by) = palm_centre(hands[0]), palm_centre(hands[1])
@@ -332,7 +356,7 @@ class App:
 
         self.status = tk.Label(self.root, text="Starting camera…", bg=DARK, fg="#eef4ef", font=("Segoe UI", 11, "bold"))
         self.status.pack(anchor="w", padx=14)
-        self.hint = tk.Label(self.root, text="Click on your slideshow once so the keys go to it.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=320, justify="left")
+        self.hint = tk.Label(self.root, text="Click on your slideshow once so the keys go to it. Clicking this window won't take the keys away.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=320, justify="left")
         self.hint.pack(anchor="w", padx=14, pady=(0, 8))
 
         self.vars = {}
@@ -351,11 +375,25 @@ class App:
         tk.Label(self.root, text="Swipe left, up or down: next  ·  Swipe right: back\nHold open palm 1 s: black screen  ·  Two hands: zoom",
                  bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=14, pady=(8, 14))
 
+        self.root.after(200, self.no_focus_steal)
         self.hotkeys = keyboard.GlobalHotKeys({"<f9>": lambda: self.root.after(0, self.hotkey_toggle)})
         self.hotkeys.start()
         self.camera = Camera(self)
         self.camera.start()
         self.root.after(30, self.poll)
+
+    def no_focus_steal(self):
+        """Clicking this window must not take the keyboard away from PowerPoint (Windows only)."""
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            GWL_EXSTYLE, WS_EX_NOACTIVATE, WS_EX_APPWINDOW = -20, 0x08000000, 0x00040000
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE | WS_EX_APPWINDOW)
+        except Exception:
+            pass
 
     # settings
     def toggle(self, key):

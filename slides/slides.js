@@ -1,10 +1,13 @@
 // Air Swipe Slides — PDF slides controlled by hand gestures from the webcam.
-import { FilesetResolver, GestureRecognizer } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+// Hand tracking loads only when presenting starts, so loading slides never depends on it.
+let FilesetResolver = null, GestureRecognizer = null;
 
 const $ = id => document.getElementById(id);
+addEventListener("error", e => { const n = document.getElementById("fileErr"); if (n && !n.textContent) n.textContent = "Something went wrong on this page: " + e.message; });
 const pdfjs = window.pdfjsLib;
-pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+// Libraries are served from this site (vendor/), not a third-party CDN, so school and office networks don't block them.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("vendor/pdf.worker.min.js", location.href).href;
+const WASM = new URL("vendor/mediapipe-wasm", location.href).href;
 const MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -16,7 +19,7 @@ let gesturesOn = true, blanked = false;
 
 // ---------------- setup screen ----------------
 const SENS_LABELS = ["Very low", "Low", "Medium", "High", "Very high"];
-const SENS_DIST = [0.30, 0.25, 0.20, 0.16, 0.12]; // share of camera width the hand must travel
+const SENS_DIST = [0.26, 0.21, 0.16, 0.12, 0.09]; // share of camera width the hand must travel
 function sensitivity() { return +$("sens").value; }
 function showSens() { $("sensVal").textContent = SENS_LABELS[sensitivity() - 1]; try { localStorage.setItem("airswipe_sens", $("sens").value); } catch {} }
 try { const s = localStorage.getItem("airswipe_sens"); if (s) $("sens").value = s; } catch {}
@@ -60,7 +63,7 @@ async function loadFiles(files) {
     for (let i = 1; i <= Math.min(total, 12); i++) thumbs.appendChild(await renderPage(i, 70, true));
   } catch (err) {
     console.error(err);
-    $("fileErr").textContent = "Couldn't open those slides. Try saving them again from PowerPoint.";
+    $("fileErr").textContent = "Couldn't open those slides (" + (err?.message || err) + "). Try saving them again from PowerPoint, or send this message to the DLU.";
   }
 }
 
@@ -291,6 +294,7 @@ async function startTracking() {
   if (!recognizer) {
     $("camLbl").textContent = "Loading hand tracking…";
     try {
+      if (!GestureRecognizer) ({ FilesetResolver, GestureRecognizer } = await import("./vendor/vision_bundle.mjs"));
       const fileset = await FilesetResolver.forVisionTasks(WASM);
       try {
         recognizer = await GestureRecognizer.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL, delegate: "GPU" }, runningMode: "VIDEO", numHands: 2 });
@@ -313,7 +317,8 @@ async function startTracking() {
 function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
 
 // swipe + palm-hold detection
-const WINDOW_MS = 450, COOLDOWN_MS = 900, HOLD_MS = 1000;
+const WINDOW_MS = 600, COOLDOWN_MS = 700, HOLD_MS = 1000, DROPOUT_MS = 300, RECOIL_MS = 1300;
+let lastSeen = 0, lastDir = null, lastDirAt = 0;
 let history = [], handSince = 0, cooldownUntil = 0, holdStart = 0, holdLatched = false, lastVideoTime = -1, lastProcess = 0;
 
 function loop() {
@@ -334,8 +339,10 @@ function loop() {
     return;
   }
   zoomGesture = null;
+  if (!lm && history.length && now - lastSeen < DROPOUT_MS) { if (gesturesOn && zoom <= 1) trySwipe(now); return; } // fast swipes blur the hand for a few frames
   if (!lm) { history = []; handSince = 0; holdStart = 0; holdLatched = false; setMeter(0); $("cam").classList.remove("hot"); return; }
   $("cam").classList.add("hot");
+  lastSeen = now;
   if (!handSince) handSince = now;
   const pts = [0, 5, 9, 13, 17].map(i => lm[i]);
   const x = pts.reduce((a, p) => a + p.x, 0) / pts.length;
@@ -375,20 +382,30 @@ function loop() {
   }
 
   // Swipe: quick mostly-horizontal travel of the open hand.
+  trySwipe(now);
+}
+
+function trySwipe(now) {
   // Ignore the first moment a hand appears, so raising it into view isn't read as a swipe up.
-  if (now < cooldownUntil || history.length < 4 || now - handSince < 250) return;
-  const first = history[0], last = history[history.length - 1];
-  const dx = last.x - first.x, dy = last.y - first.y, need = SENS_DIST[sensitivity() - 1];
+  if (now < cooldownUntil || history.length < 3 || (handSince && now - handSince < 200)) return;
+  // Largest travel in the window, so a swipe that curves back at the end still counts.
+  const xs = history.map(h => h.x), ys = history.map(h => h.y);
+  const sgn = (arr, mn, mx) => (arr.indexOf(mx) > arr.indexOf(mn) ? 1 : -1);
+  const dx = (Math.max(...xs) - Math.min(...xs)) * sgn(xs, Math.min(...xs), Math.max(...xs));
+  const dy = (Math.max(...ys) - Math.min(...ys)) * sgn(ys, Math.min(...ys), Math.max(...ys));
+  const need = SENS_DIST[sensitivity() - 1];
   // Camera image is not mirrored: a hand moving to the presenter's left moves right in the image (dx > 0).
   let dir = null;
-  if (Math.abs(dx) >= need && Math.abs(dy) < 0.7 * Math.abs(dx)) dir = dx > 0 ? "left" : "right";
-  else if (Math.abs(dy) >= need && Math.abs(dx) < 0.7 * Math.abs(dy)) dir = dy < 0 ? "up" : "down";
-  if (dir) {
-    if (blanked) setBlank(false);
-    else if (dir === "right") { flash("◀"); prev(); }
-    else { flash(dir === "up" ? "▲" : dir === "down" ? "▼" : "▶"); next(); }
-    cooldownUntil = now + COOLDOWN_MS; history = []; holdStart = 0;
-  }
+  if (Math.abs(dx) >= need && Math.abs(dy) < 0.8 * Math.abs(dx)) dir = dx > 0 ? "left" : "right";
+  else if (Math.abs(dy) >= need && Math.abs(dx) < 0.8 * Math.abs(dy)) dir = dy < 0 ? "up" : "down";
+  if (!dir) return;
+  const opposite = { left: "right", right: "left", up: "down", down: "up" };
+  if (lastDir && dir === opposite[lastDir] && now - lastDirAt < RECOIL_MS) { history = []; return; } // the hand coming back
+  if (blanked) setBlank(false);
+  else if (dir === "right") { flash("◀"); prev(); }
+  else { flash(dir === "up" ? "▲" : dir === "down" ? "▼" : "▶"); next(); }
+  lastDir = dir; lastDirAt = now;
+  cooldownUntil = now + COOLDOWN_MS; history = []; holdStart = 0;
 }
 function twoHandZoom(hands, now) {
   const centre = lm => { const pts = [0, 5, 9, 13, 17].map(i => lm[i]); return { x: 1 - pts.reduce((a, p) => a + p.x, 0) / 5, y: pts.reduce((a, p) => a + p.y, 0) / 5 }; };
