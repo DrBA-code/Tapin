@@ -426,17 +426,18 @@ function trySwipe(now) {
   else if (Math.abs(dy) >= need && Math.abs(dx) < 0.8 * Math.abs(dy)) dir = dy < 0 ? "up" : "down";
   if (!dir) return;
   if (handRoles()) {
-    // Right hand only moves forward; left hand, palm to the camera, swiping right only goes back.
+    // Only the right hand goes forward and only the left hand goes back, so a hand drifting back after a swipe is ignored.
     // Anything else (like a hand drifting back after a swipe) is ignored.
     const hand = majority(history.map(h => h.hand));
     const front = history.filter(h => h.front).length >= history.length / 2;
-    const ok = dir === "right" ? hand === "left" && front : hand === "right";
+    // Back of the hand to the camera: right hand moving right goes forward, left hand moving left goes back.
+    const ok = dir === "left" ? hand === "left" && !front : hand === "right" && !front;
     if (!ok) { history = []; return; }
   }
   const opposite = { left: "right", right: "left", up: "down", down: "up" };
   if (lastDir && dir === opposite[lastDir] && now - lastDirAt < RECOIL_MS) { history = []; return; } // the hand coming back
   if (blanked) setBlank(false);
-  else if (dir === "right") { flash("◀"); prev(); }
+  else if (dir === "left") { flash("◀"); prev(); }
   else { flash(dir === "up" ? "▲" : dir === "down" ? "▼" : "▶"); next(); }
   lastDir = dir; lastDirAt = now;
   cooldownUntil = now + COOLDOWN_MS; history = []; holdStart = 0;

@@ -4,8 +4,8 @@ Air Swipe for PowerPoint — PSSDC training suite.
 Watches the webcam for hand gestures and presses the matching keys in whatever
 window is in front (PowerPoint, Google Slides, a PDF viewer…):
 
-  swipe left / up / down  -> Right arrow  (next slide)
-  swipe right             -> Left arrow   (previous slide)
+  right hand (back to camera) moving right, up or down -> Right arrow (next slide)
+  left hand (back to camera) moving left               -> Left arrow  (previous slide)
   hold an open palm (1 s) -> B            (black screen on/off in PowerPoint)
   two hands apart/together-> + / -        (PowerPoint slide-show zoom)
   clap                    -> back to normal zoom
@@ -248,12 +248,13 @@ class Engine:
         if not direction:
             return
         if s["roles"]:
-            # Right hand only moves forward; only the left hand, palm to the camera, swiping right goes back.
+            # Only the right hand goes forward and only the left hand goes back, so a hand drifting back is ignored.
             # Anything else, like a hand drifting back after a swipe, is ignored.
             hands_seen = [h[3] for h in self.history if h[3]]
             hand = max(set(hands_seen), key=hands_seen.count) if hands_seen else None
             front = sum(1 for h in self.history if h[4]) >= len(self.history) / 2
-            ok = (hand == "left" and front) if direction == "right" else (hand == "right")
+            # Back of the hand to the camera: right hand moving right goes forward, left hand moving left goes back.
+            ok = (hand == "left" and not front) if direction == "left" else (hand == "right" and not front)
             if not ok:
                 self.history = []
                 return
@@ -265,12 +266,12 @@ class Engine:
             self.blank = False
             self.tap("b")
             self.app.event("pause", "Slide back")
-        elif direction == "right":
+        elif direction == "left":
             self.tap(keyboard.Key.left)
             self.app.event("prev", "◀ Previous")
         else:
             self.tap(keyboard.Key.right)
-            self.app.event("next", {"left": "Next ▶", "up": "Next ▲", "down": "Next ▼"}[direction])
+            self.app.event("next", {"right": "Next ▶", "up": "Next ▲", "down": "Next ▼"}[direction])
         self.last_dir, self.last_dir_at = direction, now
         self.cooldown_until = now + COOLDOWN_S
         self.history = []
@@ -392,7 +393,7 @@ class App:
         self.hint.pack(anchor="w", padx=14, pady=(0, 8))
 
         self.vars = {}
-        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right hand = next, left hand (palm out) = back"), ("swap", "Swap hands (left-handed, or wrong hand shown)"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
+        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right hand → next, left hand ← back (back of hand)"), ("swap", "Swap hands (left-handed, or wrong hand shown)"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
             v = tk.BooleanVar(value=self.settings[key]); self.vars[key] = v
             ttk.Checkbutton(self.root, text=label, variable=v, command=lambda k=key: self.toggle(k)).pack(anchor="w", padx=14)
 
@@ -404,7 +405,7 @@ class App:
         self.sens.set(self.settings["sensitivity"])
         self.sens.pack(fill="x", padx=14)
 
-        tk.Label(self.root, text="Right hand swipe left, up or down: next\nLeft hand, palm out, swipe right: back\nHold open palm 1 s: black screen  ·  Two hands: zoom",
+        tk.Label(self.root, text="Back of right hand, moving right: next\nBack of left hand, moving left: previous\nHold open palm 1 s: black screen  ·  Two hands: zoom",
                  bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=14, pady=(8, 14))
 
         self.root.after(200, self.no_focus_steal)
