@@ -173,7 +173,7 @@ function applyZoom(smooth = false) {
   const w = parseFloat(c.style.width) || c.clientWidth, h = parseFloat(c.style.height) || c.clientHeight;
   const maxX = Math.max(0, (w * zoom - w) / 2), maxY = Math.max(0, (h * zoom - h) / 2); // can reach every edge of the slide
   tx = Math.max(-maxX, Math.min(maxX, tx)); ty = Math.max(-maxY, Math.min(maxY, ty));
-  c.classList.remove("enter-next", "enter-prev");
+  c.className = ""; // a finished transition would otherwise keep overriding the zoom
   c.style.transition = smooth ? "transform .35s cubic-bezier(.2,.8,.2,1)" : "none";
   c.style.transform = zoom === 1 && tx === 0 && ty === 0 ? "" : `translate(${tx}px,${ty}px) scale(${zoom})`;
   $("count").textContent = zoom > 1.01 ? `${page} / ${total} · ×${zoom.toFixed(1)}` : `${page} / ${total}`;
@@ -220,6 +220,20 @@ function exit() {
   $("stage").hidden = true; $("setup").hidden = false;
 }
 
+// ---------------- transitions ----------------
+const TRANSITIONS = { slide: "Slide", up: "Push up", down: "Push down", fade: "Fade", zoom: "Zoom", flip: "Flip", mix: "Mix", none: "None" };
+const MIX = ["slide", "up", "down", "fade", "zoom", "flip"];
+try { const v = localStorage.getItem("airswipe_trans"); if (v && TRANSITIONS[v]) $("trans").value = v; } catch {}
+function setTransition(v) {
+  $("trans").value = v;
+  try { localStorage.setItem("airswipe_trans", v); } catch {}
+  $("bTrans").textContent = "Transition: " + TRANSITIONS[v];
+}
+setTransition($("trans").value);
+$("trans").addEventListener("change", () => setTransition($("trans").value));
+function cycleTransition() { const keys = Object.keys(TRANSITIONS); setTransition(keys[(keys.indexOf($("trans").value) + 1) % keys.length]); flash(TRANSITIONS[$("trans").value]); }
+const pickTransition = () => { const t = $("trans").value; return t === "mix" ? MIX[Math.floor(Math.random() * MIX.length)] : t; };
+
 async function go(n, dir) {
   if (!deck) return;
   n = Math.max(1, Math.min(total, n));
@@ -228,10 +242,24 @@ async function go(n, dir) {
   const c = await slideCanvas(n);
   if (n !== page) return;
   const wrap = $("slideWrap");
-  wrap.innerHTML = "";
-  c.style.transform = ""; c.style.transition = "none";
-  if (!reduced && dir) c.className = dir > 0 ? "enter-next" : "enter-prev"; else c.className = "";
-  wrap.appendChild(c);
+  const olds = [...wrap.children].filter(el => el !== c);
+  c.getAnimations?.().forEach(a => a.cancel());
+  c.style.transform = ""; c.style.transition = "none"; c.className = "";
+  const t = !reduced && dir ? pickTransition() : "none";
+  if (t === "none" || !olds.length) {
+    olds.forEach(o => o.remove());
+    if (!wrap.contains(c)) wrap.appendChild(c);
+  } else {
+    const d = dir > 0 ? "n" : "p";
+    olds.forEach(o => {
+      o.getAnimations?.().forEach(a => a.cancel());
+      o.className = `out-${t}-${d}`;
+      o.addEventListener("animationend", () => o.remove(), { once: true });
+      setTimeout(() => o.remove(), 900);
+    });
+    c.className = `in-${t}-${d}`;
+    if (!wrap.contains(c)) wrap.appendChild(c);
+  }
   $("count").textContent = `${page} / ${total}`;
   prefetch();
 }
@@ -259,6 +287,7 @@ $("bCam").addEventListener("click", toggleCamPreview);
 $("bFs").addEventListener("click", async () => { try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch {} });
 $("bExit").addEventListener("click", exit);
 $("bZoom").addEventListener("click", toggleZoom);
+$("bTrans").addEventListener("click", cycleTransition);
 function toggleGestures() {
   gesturesOn = !gesturesOn;
   $("bGest").setAttribute("aria-pressed", gesturesOn); $("bGest").textContent = gesturesOn ? "Gestures on" : "Gestures off";
@@ -283,6 +312,7 @@ addEventListener("keydown", e => {
   else if (e.key === "c" || e.key === "C") toggleCamPreview();
   else if (e.key === "s" || e.key === "S") { $("sound").checked = !soundOn(); $("sound").dispatchEvent(new Event("change")); flash(soundOn() ? "🔊" : "🔇"); }
   else if (e.key === "z" || e.key === "Z") toggleZoom();
+  else if (e.key === "t" || e.key === "T") cycleTransition();
   else if (e.key === "r" || e.key === "R" || e.key === "0") resetZoom();
   else if (e.key === "+" || e.key === "=") zoomTo(zoom * 1.25, 0, 0);
   else if (e.key === "-" || e.key === "_") zoomTo(zoom / 1.25, 0, 0);
@@ -339,7 +369,7 @@ async function startTracking() {
 function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
 
 // swipe + palm-hold detection
-const WINDOW_MS = 600, COOLDOWN_MS = 700, HOLD_MS = 1000, DROPOUT_MS = 300, RECOIL_MS = 1300;
+const WINDOW_MS = 600, COOLDOWN_MS = 700, HOLD_MS = 1500, DROPOUT_MS = 300, RECOIL_MS = 1300;
 let lastSeen = 0, lastDir = null, lastDirAt = 0;
 let history = [], handSince = 0, cooldownUntil = 0, holdStart = 0, holdLatched = false, lastVideoTime = -1, lastProcess = 0;
 
@@ -422,23 +452,22 @@ function trySwipe(now) {
   const need = SENS_DIST[sensitivity() - 1];
   // Camera image is not mirrored: a hand moving to the presenter's left moves right in the image (dx > 0).
   let dir = null;
-  if (Math.abs(dx) >= need && Math.abs(dy) < 0.8 * Math.abs(dx)) dir = dx > 0 ? "left" : "right";
-  else if (Math.abs(dy) >= need && Math.abs(dx) < 0.8 * Math.abs(dy)) dir = dy < 0 ? "up" : "down";
+  if (Math.abs(dx) >= need && Math.abs(dy) < 0.8 * Math.abs(dx)) dir = dx > 0 ? "left" : "right"; // up and down are ignored
   if (!dir) return;
   if (handRoles()) {
     // Only the right hand goes forward and only the left hand goes back, so a hand drifting back after a swipe is ignored.
     // Anything else (like a hand drifting back after a swipe) is ignored.
     const hand = majority(history.map(h => h.hand));
     const front = history.filter(h => h.front).length >= history.length / 2;
-    // Back of the hand to the camera: right hand moving right goes forward, left hand moving left goes back.
-    const ok = dir === "left" ? hand === "left" && !front : hand === "right" && !front;
+    // Palm to the camera: right hand sweeping left goes forward, left hand sweeping right goes back.
+    const ok = dir === "left" ? hand === "right" && front : hand === "left" && front;
     if (!ok) { history = []; return; }
   }
-  const opposite = { left: "right", right: "left", up: "down", down: "up" };
+  const opposite = { left: "right", right: "left" };
   if (lastDir && dir === opposite[lastDir] && now - lastDirAt < RECOIL_MS) { history = []; return; } // the hand coming back
   if (blanked) setBlank(false);
-  else if (dir === "left") { flash("◀"); prev(); }
-  else { flash(dir === "up" ? "▲" : dir === "down" ? "▼" : "▶"); next(); }
+  else if (dir === "left") { flash("▶"); next(); }
+  else { flash("◀"); prev(); }
   lastDir = dir; lastDirAt = now;
   cooldownUntil = now + COOLDOWN_MS; history = []; holdStart = 0;
 }

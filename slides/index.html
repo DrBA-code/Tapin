@@ -31,12 +31,29 @@
 
   #stage{position:fixed;inset:0;background:#000;color:#fff;overflow:hidden;cursor:none}
   #stage.mouse{cursor:default}
-  #slideWrap{position:absolute;inset:0;display:grid;place-items:center}
+  #slideWrap{position:absolute;inset:0;display:grid;place-items:center;perspective:1600px;overflow:hidden}
+  #slideWrap > canvas{grid-area:1/1}
   #slideWrap canvas{display:block;will-change:transform;box-shadow:0 0 0 1px rgba(255,255,255,.04)}
-  #slideWrap canvas.enter-next{animation:inR .38s cubic-bezier(.2,.8,.2,1)}
-  #slideWrap canvas.enter-prev{animation:inL .38s cubic-bezier(.2,.8,.2,1)}
-  @keyframes inR{from{transform:translateX(9%);opacity:0}to{transform:none;opacity:1}}
-  @keyframes inL{from{transform:translateX(-9%);opacity:0}to{transform:none;opacity:1}}
+  /* transitions: in-/out- + name + n(ext)/p(revious) */
+  #slideWrap canvas[class^="in-"],#slideWrap canvas[class^="out-"]{animation-duration:.5s;animation-timing-function:cubic-bezier(.3,.7,.2,1);animation-fill-mode:both}
+  #slideWrap canvas[class^="out-"]{z-index:0;pointer-events:none}
+  #slideWrap canvas[class^="in-"]{z-index:1}
+  .in-slide-n{animation-name:sInR}.out-slide-n{animation-name:sOutL}.in-slide-p{animation-name:sInL}.out-slide-p{animation-name:sOutR}
+  @keyframes sInR{from{transform:translateX(105%)}to{transform:none}} @keyframes sOutL{to{transform:translateX(-105%)}}
+  @keyframes sInL{from{transform:translateX(-105%)}to{transform:none}} @keyframes sOutR{to{transform:translateX(105%)}}
+  .in-up-n{animation-name:uInB}.out-up-n{animation-name:uOutT}.in-up-p{animation-name:uInT}.out-up-p{animation-name:uOutB}
+  .in-down-n{animation-name:uInT}.out-down-n{animation-name:uOutB}.in-down-p{animation-name:uInB}.out-down-p{animation-name:uOutT}
+  @keyframes uInB{from{transform:translateY(105%)}to{transform:none}} @keyframes uOutT{to{transform:translateY(-105%)}}
+  @keyframes uInT{from{transform:translateY(-105%)}to{transform:none}} @keyframes uOutB{to{transform:translateY(105%)}}
+  .in-fade-n,.in-fade-p{animation-name:fIn}.out-fade-n,.out-fade-p{animation-name:fOut}
+  @keyframes fIn{from{opacity:0}to{opacity:1}} @keyframes fOut{to{opacity:0}}
+  .in-zoom-n{animation-name:zInS}.out-zoom-n{animation-name:zOutB}.in-zoom-p{animation-name:zInB}.out-zoom-p{animation-name:zOutS}
+  @keyframes zInS{from{transform:scale(.82);opacity:0}to{transform:none;opacity:1}} @keyframes zOutB{to{transform:scale(1.18);opacity:0}}
+  @keyframes zInB{from{transform:scale(1.18);opacity:0}to{transform:none;opacity:1}} @keyframes zOutS{to{transform:scale(.82);opacity:0}}
+  .in-flip-n{animation-name:flInN;animation-delay:.25s!important}.out-flip-n{animation-name:flOutN}.in-flip-p{animation-name:flInP;animation-delay:.25s!important}.out-flip-p{animation-name:flOutP}
+  #slideWrap canvas[class*="-flip-"]{animation-duration:.25s!important;backface-visibility:hidden}
+  @keyframes flInN{from{transform:rotateY(90deg)}to{transform:none}} @keyframes flOutN{to{transform:rotateY(-90deg)}}
+  @keyframes flInP{from{transform:rotateY(-90deg)}to{transform:none}} @keyframes flOutP{to{transform:rotateY(90deg)}}
   #blank{position:absolute;inset:0;background:#000;display:grid;place-items:center;z-index:4}
   #blank div{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,56px);color:#e8b44a;opacity:.9}
   #cam{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:220px;aspect-ratio:4/3;border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,.18);z-index:5;background:#111;transition:border-color .2s}
@@ -85,15 +102,21 @@
     <div class="panel">
       <h2>2. The gestures</h2>
       <div class="gestures">
-        <div class="gest"><div class="g">🫱 ⟶</div><b>Right hand, back to the camera, moving right: next</b><span>Turn the back of your right hand to the camera and sweep it to the right. Up or down with the right hand also goes forward.</span></div>
-        <div class="gest"><div class="g">⟵ 🫲</div><b>Left hand, back to the camera, moving left: previous</b><span>Turn the back of your left hand to the camera and sweep it to the left. Only this goes back, so slides can't slip backwards by accident.</span></div>
+        <div class="gest"><div class="g">⟵ ✋</div><b>Right hand, palm to the camera, sweep left: next</b><span>Show the palm of your right hand and sweep it to your left, like turning a page forward.</span></div>
+        <div class="gest"><div class="g">🤚 ⟶</div><b>Left hand, palm to the camera, sweep right: previous</b><span>Show the palm of your left hand and sweep it to your right. Only this goes back, so slides can't slip backwards by accident. Up and down movements are ignored.</span></div>
         <div class="gest"><div class="g">🙌 ↔</div><b>Two hands apart: zoom in</b><span>Raise both hands and pull them apart to zoom into that part of the slide. Push them together to zoom out. Clap to return to full view.</span></div>
         <div class="gest"><div class="g">🤏</div><b>Pinch and drag: move around</b><span>While zoomed, pinch thumb and index finger together and drag to move to another part of the slide. Swipes pause until you zoom back out.</span></div>
-        <div class="gest"><div class="g">✋</div><b>Hold palm up: pause</b><span>Show your open palm to the camera and hold still for a second. The screen goes dark with "Eyes up front". Do it again to bring the slide back.</span></div>
+        <div class="gest"><div class="g">✋</div><b>Hold palm up: pause</b><span>Show your open palm to the camera and hold it completely still for a second and a half. The screen goes dark with "Eyes up front". Do it again to bring the slide back.</span></div>
       </div>
-      <p class="muted small">Stand 1 to 3 metres from the laptop camera, in good light. Keyboard still works: ← → to change slides, B to pause, G to turn gestures on or off, S to turn the sound on or off, Z to turn hand zoom on or off, + and − to zoom, R to reset zoom, C to hide the camera preview.</p>
-      <div class="sens"><label class="consent" for="handRoles" style="color:var(--fg)"><input type="checkbox" id="handRoles" checked> Right hand moving right = next, left hand moving left = back, back of the hand to the camera (recommended)</label></div>
+      <p class="muted small">Stand 1 to 3 metres from the laptop camera, in good light. Keyboard still works: ← → to change slides, B to pause, G to turn gestures on or off, S to turn the sound on or off, Z to turn hand zoom on or off, T to change the transition, + and − to zoom, R to reset zoom, C to hide the camera preview.</p>
+      <div class="sens"><label class="consent" for="handRoles" style="color:var(--fg)"><input type="checkbox" id="handRoles" checked> Right palm sweeping left = next, left palm sweeping right = back (recommended)</label></div>
       <div class="sens"><label class="consent" for="swapHands" style="color:var(--fg)"><input type="checkbox" id="swapHands"> Swap hands (left-handed presenter, or if the camera label shows the wrong hand)</label></div>
+      <div class="sens"><label for="trans">Slide transition</label>
+        <select id="trans" style="padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg)">
+          <option value="slide">Slide (left/right)</option><option value="up">Push up</option><option value="down">Push down</option>
+          <option value="fade">Fade</option><option value="zoom">Zoom</option><option value="flip">Flip</option>
+          <option value="mix">Mix (a different one each time)</option><option value="none">None</option>
+        </select></div>
       <div class="sens"><label class="consent" for="zoomOpt" style="color:var(--fg)"><input type="checkbox" id="zoomOpt" checked> Hand zoom (two hands to zoom, pinch to move)</label></div>
       <div class="sens"><label class="consent" for="sound" style="color:var(--fg)"><input type="checkbox" id="sound" checked> Swoosh sound on each swipe</label><button class="btn ghost small" id="testSound" type="button">Hear it</button></div>
       <div class="sens"><label for="sens">Swipe sensitivity</label><input type="range" id="sens" min="1" max="5" step="1" value="3"><span id="sensVal" class="muted">Medium</span></div>
@@ -130,6 +153,7 @@
     <button id="bPrev" type="button">◀ Previous</button>
     <button id="bNext" type="button">Next ▶</button>
     <button id="bGest" type="button" aria-pressed="true">Gestures on</button>
+    <button id="bTrans" type="button">Transition: Slide</button>
     <button id="bZoom" type="button" aria-pressed="true">Hand zoom on</button>
     <button id="bCam" type="button" aria-pressed="true">Camera preview</button>
     <button id="bFs" type="button">Full screen</button>
