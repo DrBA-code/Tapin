@@ -129,8 +129,8 @@ def is_open_palm(lm):
 
 
 def which_hand(label, swap):
-    """MediaPipe labels hands as if the picture were mirrored; ours is not, so its "Left" is the presenter's right hand."""
-    h = {"Left": "right", "Right": "left"}.get(label)
+    """MediaPipe's "Left"/"Right" label matches the presenter's own hand for this camera picture (confirmed in testing)."""
+    h = {"Left": "left", "Right": "right"}.get(label)
     if h and swap:
         h = "left" if h == "right" else "right"
     return h
@@ -141,7 +141,7 @@ def palm_facing(lm, label):
     ax, ay = lm[5].x - lm[0].x, lm[5].y - lm[0].y
     bx, by = lm[17].x - lm[0].x, lm[17].y - lm[0].y
     z = ax * by - ay * bx
-    return z < 0 if label == "Left" else z > 0
+    return z < 0 if label == "Right" else z > 0
 
 
 class Engine:

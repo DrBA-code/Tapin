@@ -137,7 +137,7 @@ function swoosh(kind) {
 }
 
 // ---------------- which hand does what ----------------
-// MediaPipe labels hands as if the picture were mirrored; our camera picture is not, so its "Left" is the presenter's right hand.
+// MediaPipe's "Left"/"Right" label matches the presenter's own hand for this camera picture (confirmed in testing).
 const handRoles = () => $("handRoles").checked;   // right hand = next, left hand = back
 const swapHands = () => $("swapHands").checked;
 try { const v = localStorage.getItem("airswipe_roles"); if (v !== null) $("handRoles").checked = v === "1"; } catch {}
@@ -145,7 +145,7 @@ try { const v = localStorage.getItem("airswipe_swap"); if (v !== null) $("swapHa
 $("handRoles").addEventListener("change", () => { try { localStorage.setItem("airswipe_roles", handRoles() ? "1" : "0"); } catch {} });
 $("swapHands").addEventListener("change", () => { try { localStorage.setItem("airswipe_swap", swapHands() ? "1" : "0"); } catch {} });
 function whichHand(label) {
-  let h = label === "Left" ? "right" : label === "Right" ? "left" : null;
+  let h = label === "Left" ? "left" : label === "Right" ? "right" : null;
   if (h && swapHands()) h = h === "right" ? "left" : "right";
   return h;
 }
@@ -154,7 +154,7 @@ function palmFacing(lm, label) {
   // Uses the hand as the camera sees it (not the swap setting): a right palm turns one way, a left palm the other.
   const ax = lm[5].x - lm[0].x, ay = lm[5].y - lm[0].y, bx = lm[17].x - lm[0].x, by = lm[17].y - lm[0].y;
   const z = ax * by - ay * bx;
-  return label === "Left" ? z < 0 : z > 0;   // "Left" label = presenter's right hand
+  return label === "Right" ? z < 0 : z > 0;   // a right palm turns one way, a left palm the other
 }
 const majority = arr => { const c = {}; arr.forEach(v => { if (v != null) c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || null; };
 
