@@ -9,7 +9,7 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognize
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---------------- state ----------------
-let pdf = null, page = 1, total = 0;
+let deck = null, page = 1, total = 0;   // deck: { kind: "pdf", doc } or { kind: "images", imgs: [HTMLImageElement] }
 const cache = new Map();          // page number -> rendered canvas
 let recognizer = null, stream = null, running = false;
 let gesturesOn = true, blanked = false;
@@ -26,18 +26,33 @@ $("sens").addEventListener("input", showSens);
 const drop = $("drop");
 ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
-drop.addEventListener("drop", e => { const f = e.dataTransfer.files?.[0]; if (f) loadPdf(f); });
-$("file").addEventListener("change", e => { const f = e.target.files?.[0]; if (f) loadPdf(f); });
+drop.addEventListener("drop", e => { if (e.dataTransfer.files?.length) loadFiles([...e.dataTransfer.files]); });
+$("file").addEventListener("change", e => { if (e.target.files?.length) loadFiles([...e.target.files]); });
 
-async function loadPdf(file) {
+const isPdf = f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name);
+const isImg = f => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+const isPpt = f => /\.(pptx?|ppsx?|key|odp)$/i.test(f.name);
+const natural = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+
+async function loadFiles(files) {
   $("fileErr").textContent = "";
-  if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { $("fileErr").textContent = "That isn't a PDF. Save your slides as PDF first."; return; }
+  if (files.some(isPpt)) { $("fileErr").textContent = "Browsers can't open PowerPoint files directly. In PowerPoint use File → Save As → PDF, or File → Export → PNG to save each slide as a picture, then choose that here."; return; }
+  const pdfFile = files.find(isPdf), imgs = files.filter(isImg).sort(natural);
+  if (!pdfFile && !imgs.length) { $("fileErr").textContent = "Choose a PDF, or the slide pictures (PNG or JPG)."; return; }
   try {
     $("fileErr").textContent = "Opening slides…";
-    const data = new Uint8Array(await file.arrayBuffer());
-    pdf = await pdfjs.getDocument({ data }).promise;
-    total = pdf.numPages; page = 1; cache.clear();
-    $("fileName").textContent = file.name;
+    if (pdfFile) {
+      const data = new Uint8Array(await pdfFile.arrayBuffer());
+      deck = { kind: "pdf", doc: await pdfjs.getDocument({ data }).promise };
+      total = deck.doc.numPages;
+      $("fileName").textContent = pdfFile.name;
+    } else {
+      const loaded = await Promise.all(imgs.map(f => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(f); })));
+      deck = { kind: "images", imgs: loaded };
+      total = loaded.length;
+      $("fileName").textContent = imgs.length === 1 ? imgs[0].name : `${imgs.length} pictures (${imgs[0].name} … ${imgs[imgs.length - 1].name})`;
+    }
+    page = 1; cache.clear();
     $("pageCount").textContent = `${total} slide${total === 1 ? "" : "s"}`;
     $("loaded").hidden = false; $("fileErr").textContent = "";
     $("startBtn").disabled = false;
@@ -45,12 +60,21 @@ async function loadPdf(file) {
     for (let i = 1; i <= Math.min(total, 12); i++) thumbs.appendChild(await renderPage(i, 70, true));
   } catch (err) {
     console.error(err);
-    $("fileErr").textContent = "Couldn't open that PDF. Try saving it again from PowerPoint.";
+    $("fileErr").textContent = "Couldn't open those slides. Try saving them again from PowerPoint.";
   }
 }
 
 async function renderPage(n, targetHeight, isThumb = false) {
-  const p = await pdf.getPage(n);
+  const dprI = Math.min(window.devicePixelRatio || 1, 2);
+  if (deck.kind === "images") {
+    const img = deck.imgs[n - 1], c = document.createElement("canvas");
+    const scale = isThumb ? (targetHeight * dprI) / img.naturalHeight : Math.min(innerWidth / img.naturalWidth, innerHeight / img.naturalHeight) * dprI;
+    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    if (!isThumb) { c.style.width = c.width / dprI + "px"; c.style.height = c.height / dprI + "px"; }
+    const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  const p = await deck.doc.getPage(n);
   const base = p.getViewport({ scale: 1 });
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let scale;
@@ -72,10 +96,45 @@ function prefetch() {
   for (const k of cache.keys()) if (Math.abs(k - page) > 2) cache.delete(k);
 }
 
+// ---------------- swoosh sound ----------------
+let actx = null, noiseBuf = null;
+function soundOn() { return $("sound").checked; }
+try { const v = localStorage.getItem("airswipe_sound"); if (v !== null) $("sound").checked = v === "1"; } catch {}
+$("sound").addEventListener("change", () => { try { localStorage.setItem("airswipe_sound", soundOn() ? "1" : "0"); } catch {} if (soundOn()) { unlockAudio(); swoosh("next"); } });
+$("testSound").addEventListener("click", () => { unlockAudio(); swoosh("next"); setTimeout(() => swoosh("prev"), 500); });
+function unlockAudio() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    actx = new AC();
+    noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.8, actx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  if (actx.state === "suspended") actx.resume();
+}
+// A short burst of noise swept through a band-pass filter: the "fwip" of a cloth being flicked.
+function swoosh(kind) {
+  if (!soundOn() || !actx) return;
+  const t = actx.currentTime, dur = kind === "pause" ? 0.5 : 0.36;
+  const src = actx.createBufferSource(); src.buffer = noiseBuf;
+  const bp = actx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.9;
+  const hp = actx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 250;
+  const g = actx.createGain();
+  const [f0, f1] = kind === "prev" ? [3200, 500] : kind === "pause" ? [900, 300] : [500, 3600];
+  bp.frequency.setValueAtTime(f0, t);
+  bp.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.85);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.9, t + dur * 0.35);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(hp).connect(bp).connect(g).connect(actx.destination);
+  src.start(t, Math.random() * 0.3); src.stop(t + dur + 0.02);
+}
+
 // ---------------- presenting ----------------
 $("startBtn").addEventListener("click", start);
 async function start() {
-  if (!pdf) return;
+  if (!deck) return;
+  unlockAudio();
   try { await document.documentElement.requestFullscreen(); } catch {}
   $("setup").hidden = true; $("stage").hidden = false;
   running = true; blanked = false; $("blank").hidden = true;
@@ -93,7 +152,7 @@ function exit() {
 }
 
 async function go(n, dir) {
-  if (!pdf) return;
+  if (!deck) return;
   n = Math.max(1, Math.min(total, n));
   if (n === page && dir !== 0) { flash(dir > 0 ? "End" : "Start"); return; }
   page = n;
@@ -106,9 +165,9 @@ async function go(n, dir) {
   $("count").textContent = `${page} / ${total}`;
   prefetch();
 }
-const next = () => { if (!blanked) go(page + 1, 1); };
-const prev = () => { if (!blanked) go(page - 1, -1); };
-function setBlank(on) { blanked = on; $("blank").hidden = !on; flash(on ? "✋" : "▶"); }
+const next = () => { if (blanked) return; if (page < total) swoosh("next"); go(page + 1, 1); };
+const prev = () => { if (blanked) return; if (page > 1) swoosh("prev"); go(page - 1, -1); };
+function setBlank(on) { blanked = on; $("blank").hidden = !on; flash(on ? "✋" : "▶"); swoosh("pause"); }
 
 function flash(text) {
   const p = $("pop"); p.textContent = text;
@@ -146,6 +205,7 @@ addEventListener("keydown", e => {
   else if (e.key === "b" || e.key === "B" || e.key === ".") setBlank(!blanked);
   else if (e.key === "g" || e.key === "G") toggleGestures();
   else if (e.key === "c" || e.key === "C") toggleCamPreview();
+  else if (e.key === "s" || e.key === "S") { $("sound").checked = !soundOn(); $("sound").dispatchEvent(new Event("change")); flash(soundOn() ? "🔊" : "🔇"); }
   else if (e.key === "Home") go(1, -1);
   else if (e.key === "End") go(total, 1);
   else if (e.key === "Escape" && !document.fullscreenElement) exit();

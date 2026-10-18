@@ -65,11 +65,11 @@
     <div class="panel">
       <h2>1. Load your slides</h2>
       <label class="drop" id="drop" for="file">
-        <b>Choose a PDF of your slides</b>
-        <span class="muted">or drag it here</span>
-        <span class="muted small">From PowerPoint: File → Save As → PDF. From Google Slides: File → Download → PDF.</span>
+        <b>Choose your slides: a PDF, or the slide pictures</b>
+        <span class="muted">or drag them here</span>
+        <span class="muted small">From PowerPoint: File → Save As → PDF, or File → Export → PNG (select all the pictures). From Google Slides or Canva: Download → PDF.</span>
       </label>
-      <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+      <input type="file" id="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.pptx,.ppt" multiple hidden>
       <div id="loaded" hidden>
         <div class="ready"><strong id="fileName"></strong><span class="muted" id="pageCount"></span></div>
         <div class="thumbs" id="thumbs"></div>
@@ -84,7 +84,8 @@
         <div class="gest"><div class="g">⟶ 👋</div><b>Swipe right: previous slide</b><span>Move your open hand quickly from left to right to go back.</span></div>
         <div class="gest"><div class="g">✋</div><b>Hold palm up: pause</b><span>Show your open palm to the camera and hold still for a second. The screen goes dark with "Eyes up front". Do it again to bring the slide back.</span></div>
       </div>
-      <p class="muted small">Stand 1 to 3 metres from the laptop camera, in good light. Keyboard still works: ← → to change slides, B to pause, G to turn gestures on or off, C to hide the camera preview.</p>
+      <p class="muted small">Stand 1 to 3 metres from the laptop camera, in good light. Keyboard still works: ← → to change slides, B to pause, G to turn gestures on or off, S to turn the sound on or off, C to hide the camera preview.</p>
+      <div class="sens"><label class="consent" for="sound" style="color:var(--fg)"><input type="checkbox" id="sound" checked> Swoosh sound on each swipe</label><button class="btn ghost small" id="testSound" type="button">Hear it</button></div>
       <div class="sens"><label for="sens">Swipe sensitivity</label><input type="range" id="sens" min="1" max="5" step="1" value="3"><span id="sensVal" class="muted">Medium</span></div>
     </div>
 
