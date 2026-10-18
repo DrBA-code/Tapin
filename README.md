@@ -8,6 +8,7 @@ Entrance check-in and big-screen welcome for PSSDC training programmes. Feature 
 - **Coordinators:** each programme has its own coordinator PIN. With the coordinator link (or link code + PIN on the menu) they open that programme's register, screens and QR code, and can close or reopen it.
 - **Register** (`/#register/CODE`): attendance with time in, time out and duration; downloads as CSV for Excel.
 - **QR poster** (`/#qr/CODE`): full-screen QR code to project or print.
+- **Air Swipe Slides** (`/slides/`): present a PDF and change slides by waving a hand at the webcam (swipe left, up or down for next; right for previous; hold an open palm to pause). Runs entirely in the browser with MediaPipe hand tracking.
 - **Logos:** add `assets/pssdc-logo.png` and `assets/lagos-logo.png`; they show at the top left of every screen.
 
 Static site (no build step) hosted on Vercel; data and photos in Supabase.
