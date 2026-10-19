@@ -41,7 +41,7 @@ APP = "Air Swipe for PowerPoint"
 SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "AirSwipe")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "roles": True, "swap": False, "sensitivity": 3, "on_top": True, "camera": 0,
-            "right_label": None, "right_sign": None}  # learned once by "Check my hands"
+            "right_label": None, "right_sign": None, "compact": False}  # learned once by "Check my hands"
 SENS_DIST = [0.26, 0.21, 0.16, 0.12, 0.09]  # share of the camera picture the hand must travel
 SENS_LABELS = ["Very low", "Low", "Medium", "High", "Very high"]
 
@@ -392,7 +392,7 @@ class Camera(threading.Thread):
                                            drawing.DrawingSpec(color=(74, 180, 232), thickness=2, circle_radius=3),
                                            drawing.DrawingSpec(color=(138, 185, 63), thickness=2))
                 preview = cv2.flip(preview, 1)
-                preview = cv2.resize(preview, (320, 240))
+                preview = cv2.resize(preview, (288, 216))
                 try:
                     self.app.frame_q.put_nowait((cv2.cvtColor(preview, cv2.COLOR_BGR2RGB), bool(hands), meter))
                 except queue.Full:
@@ -481,53 +481,64 @@ class App:
         style.map("TCheckbutton", background=[("active", DARK)])
         style.configure("TScale", background=DARK)
 
-        tk.Label(self.root, text="Air Swipe", bg=DARK, fg=GOLD, font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=14, pady=(12, 0))
-        tk.Label(self.root, text="PSSDC training suite · for PowerPoint and any slideshow", bg=DARK, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=14)
+        # Two columns so the window stays short enough for laptop screens:
+        # left = camera and status, right = settings and phone remote.
+        head = tk.Frame(self.root, bg=DARK); head.grid(row=0, column=0, columnspan=2, sticky="ew", padx=14, pady=(10, 4))
+        tk.Label(head, text="Air Swipe", bg=DARK, fg=GOLD, font=("Segoe UI", 15, "bold")).pack(side="left")
+        tk.Label(head, text="  PSSDC training suite · for PowerPoint and any slideshow", bg=DARK, fg=MUTED, font=("Segoe UI", 9)).pack(side="left", pady=(4, 0))
+        self.compact_btn = tk.Button(head, text="Hide settings", command=self.toggle_compact, bg="#20372e", fg="#eef4ef",
+                                     activebackground=GREEN, relief="flat", font=("Segoe UI", 9), padx=8, pady=2)
+        self.compact_btn.pack(side="right")
 
-        self.border = tk.Frame(self.root, bg="#20372e", padx=3, pady=3)
-        self.border.pack(padx=14, pady=10)
-        self.video = tk.Label(self.border, bg="black", width=320, height=240)
+        left = tk.Frame(self.root, bg=DARK); left.grid(row=1, column=0, sticky="n", padx=(14, 8), pady=(0, 12))
+        self.border = tk.Frame(left, bg="#20372e", padx=3, pady=3)
+        self.border.pack()
+        self.video = tk.Label(self.border, bg="black", width=288, height=216)
         self.video.pack()
-        self.meter = tk.Canvas(self.border, height=4, width=320, bg="#111", highlightthickness=0)
+        self.meter = tk.Canvas(self.border, height=4, width=288, bg="#111", highlightthickness=0)
         self.meter.pack(fill="x")
         self.meter_bar = self.meter.create_rectangle(0, 0, 0, 4, fill=GOLD, width=0)
+        self.status = tk.Label(left, text="Starting camera…", bg=DARK, fg="#eef4ef", font=("Segoe UI", 11, "bold"))
+        self.status.pack(anchor="w", pady=(6, 0))
+        self.hint = tk.Label(left, text="Click on your slideshow once so the keys go to it. Clicking this window won't take the keys away.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=290, justify="left")
+        self.hint.pack(anchor="w")
+        tk.Label(left, text="Right palm, sweep left: next\nLeft palm, sweep right: previous\nOpen palm still 1.5 s: black screen · Two hands: zoom",
+                 bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=(6, 0))
 
-        self.status = tk.Label(self.root, text="Starting camera…", bg=DARK, fg="#eef4ef", font=("Segoe UI", 11, "bold"))
-        self.status.pack(anchor="w", padx=14)
-        self.hint = tk.Label(self.root, text="Click on your slideshow once so the keys go to it. Clicking this window won't take the keys away.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=320, justify="left")
-        self.hint.pack(anchor="w", padx=14, pady=(0, 8))
-
+        self.right = right = tk.Frame(self.root, bg=DARK); right.grid(row=1, column=1, sticky="n", padx=(8, 14), pady=(0, 12))
         self.vars = {}
-        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right palm ← next, left palm → back"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
+        for key, label in (("gestures", "Gestures on (F9 from anywhere)"), ("roles", "Right palm ← next, left palm → back"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
             v = tk.BooleanVar(value=self.settings[key]); self.vars[key] = v
-            ttk.Checkbutton(self.root, text=label, variable=v, command=lambda k=key: self.toggle(k)).pack(anchor="w", padx=14)
+            ttk.Checkbutton(right, text=label, variable=v, command=lambda k=key: self.toggle(k)).pack(anchor="w")
 
-        row = tk.Frame(self.root, bg=DARK); row.pack(fill="x", padx=14, pady=(8, 4))
+        row = tk.Frame(right, bg=DARK); row.pack(fill="x", pady=(6, 0))
         tk.Label(row, text="Swipe sensitivity", bg=DARK, fg="#eef4ef", font=("Segoe UI", 10)).pack(side="left")
         self.sens_lbl = tk.Label(row, text=SENS_LABELS[self.settings["sensitivity"] - 1], bg=DARK, fg=MUTED, font=("Segoe UI", 9))
         self.sens_lbl.pack(side="right")
-        self.sens = tk.Scale(self.root, from_=1, to=5, orient="horizontal", showvalue=False, bg=DARK, fg="#eef4ef", troughcolor="#20372e", highlightthickness=0, bd=0, command=self.set_sens)
+        self.sens = tk.Scale(right, from_=1, to=5, orient="horizontal", showvalue=False, bg=DARK, fg="#eef4ef", troughcolor="#20372e", highlightthickness=0, bd=0, command=self.set_sens)
         self.sens.set(self.settings["sensitivity"])
-        self.sens.pack(fill="x", padx=14)
+        self.sens.pack(fill="x")
 
-        tk.Button(self.root, text="Check my hands", command=self.engine.start_calibration, bg="#20372e", fg="#eef4ef",
-                  activebackground=GREEN, relief="flat", font=("Segoe UI", 10), padx=10, pady=4).pack(anchor="w", padx=14, pady=(6, 0))
+        tk.Button(right, text="Check my hands", command=self.engine.start_calibration, bg="#20372e", fg="#eef4ef",
+                  activebackground=GREEN, relief="flat", font=("Segoe UI", 10), padx=10, pady=3).pack(anchor="w", pady=(6, 0))
 
         # phone remote
         self.remote_code = "".join(random.choice("ABCDEFGHJKMNPQRSTUVWXYZ23456789") for _ in range(6))
-        remote_row = tk.Frame(self.root, bg=DARK); remote_row.pack(fill="x", padx=14, pady=(10, 0))
-        qr_img = qrcode.make(REMOTE_PAGE + self.remote_code, box_size=3, border=1).get_image().convert("RGB").resize((110, 110))
+        remote_row = tk.Frame(right, bg=DARK); remote_row.pack(fill="x", pady=(10, 0))
+        qr_img = qrcode.make(REMOTE_PAGE + self.remote_code, box_size=3, border=1).get_image().convert("RGB").resize((104, 104))
         self.qr_photo = ImageTk.PhotoImage(qr_img)
         tk.Label(remote_row, image=self.qr_photo, bg="white").pack(side="left")
         remote_txt = tk.Frame(remote_row, bg=DARK); remote_txt.pack(side="left", padx=10, fill="x")
         tk.Label(remote_txt, text="Phone remote", bg=DARK, fg=GOLD, font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        tk.Label(remote_txt, text="Scan to control the slides from your phone.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=190, justify="left").pack(anchor="w")
+        tk.Label(remote_txt, text="Scan to control the slides from your phone.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=150, justify="left").pack(anchor="w")
         tk.Label(remote_txt, text=f"Code: {self.remote_code}", bg=DARK, fg="#eef4ef", font=("Consolas", 12, "bold")).pack(anchor="w", pady=(4, 0))
         self.remote_status = tk.Label(remote_txt, text="Connecting…", bg=DARK, fg=MUTED, font=("Segoe UI", 9))
         self.remote_status.pack(anchor="w")
 
-        tk.Label(self.root, text="Right palm, sweep left: next\nLeft palm, sweep right: previous\nHold open palm still 1.5 s: black screen  ·  Two hands: zoom",
-                 bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=14, pady=(8, 14))
+        self.compact = bool(self.settings.get("compact"))
+        if self.compact:
+            self.right.grid_remove(); self.compact_btn.config(text="Show settings")
+        self.root.geometry("+20+20")
 
         self.root.after(200, self.no_focus_steal)
         self.hotkeys = keyboard.GlobalHotKeys({"<f9>": lambda: self.root.after(0, self.hotkey_toggle)})
@@ -552,6 +563,15 @@ class App:
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE | WS_EX_APPWINDOW)
         except Exception:
             pass
+
+    def toggle_compact(self):
+        """Hide the settings column to leave just the camera, status and gesture guide."""
+        self.compact = not self.compact
+        if self.compact:
+            self.right.grid_remove(); self.compact_btn.config(text="Show settings")
+        else:
+            self.right.grid(); self.compact_btn.config(text="Hide settings")
+        self.settings["compact"] = self.compact; save_settings(self.settings)
 
     # settings
     def toggle(self, key):
@@ -607,7 +627,7 @@ class App:
             self.video.configure(image=img); self.video.image = img
             on = self.settings["gestures"]
             self.border.config(bg=(GOLD if seen else GREEN) if on else "#20372e")
-            self.meter.coords(self.meter_bar, 0, 0, int(320 * meter), 4)
+            self.meter.coords(self.meter_bar, 0, 0, int(288 * meter), 4)
             if time.monotonic() > self.msg_until:
                 hand, front = self.engine.seen_hand
                 seen_txt = (f"{'Right' if hand == 'right' else 'Left'} hand · {'palm' if front else 'back'}" if hand else "Hand seen")
