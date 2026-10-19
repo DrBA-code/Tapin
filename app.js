@@ -160,6 +160,7 @@
             <a class="btn small" href="#display/${p.code}" target="_blank" rel="noopener">Welcome screen</a>
             <a class="btn small ghost" href="#register/${p.code}">Register</a>
             <a class="btn small ghost" href="#qr/${p.code}" target="_blank" rel="noopener">QR poster</a>
+            <a class="btn small ghost" href="throw/#${p.code}" target="_blank" rel="noopener">Throw console</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
@@ -388,12 +389,14 @@
       $("doneEyebrow").textContent = "You're checked in";
       $("doneName").textContent = "Ẹ káàbọ̀, " + fullName(e);
       $("doneMsg").textContent = "You are welcome. Look up at the screen.";
+      $("roomLink").href = "room/#" + kProg.code; $("roomLink").hidden = false;
     } else {
       $("doneEyebrow").textContent = "You've tapped out";
       $("doneName").textContent = "Ó dàbọ̀, " + fullName(e);
       $("doneMsg").textContent = "Goodbye, and thank you for attending.";
+      $("roomLink").href = "room/#" + kProg.code; $("roomLink").hidden = false;
     }
-    clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, 10000);
+    clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, 20000);
   }
   function resetKiosk() {
     clearTimeout(doneTimer);
@@ -543,6 +546,7 @@
     $("rBody").hidden = false;
     $("rDisplay").href = "#display/" + rProg.code;
     $("rQr").href = "#qr/" + rProg.code;
+    $("rThrow").href = "throw/#" + rProg.code;
     $("rBack").textContent = rRole === "organiser" ? "Back to programmes" : "Sign out";
     setStatusBtn();
     await loadRegister();

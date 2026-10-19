@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Throw Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* Facilitator console: room on the left (QR + who's in), throwables in the middle, incoming contacts on the right. */
+  .wrap.wide{max-width:1180px}
+  .cols{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start;margin-top:18px}
+  .cols > *{min-width:0}
+  @media (max-width:860px){.cols{grid-template-columns:1fr}}
+  .roomq{background:#fff;border-radius:12px;padding:10px;width:100%;max-width:240px;aspect-ratio:1}
+  .roomq svg{width:100%;height:100%;display:block}
+  .big-n{font-family:var(--display);font-weight:800;font-size:40px;line-height:1;font-variant-numeric:tabular-nums}
+  .split{display:flex;gap:14px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid2 .full{grid-column:1/-1}
+  @media (max-width:560px){.grid2{grid-template-columns:1fr}}
+  details.panel summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:20px;list-style:none}
+  details.panel summary::-webkit-details-marker{display:none}
+  details.panel summary::after{content:"＋";float:right;color:var(--muted)}
+  details.panel[open] summary::after{content:"－"}
+  .tlist{display:grid;gap:10px}
+  .titem{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .titem .ic{width:56px;height:56px;border-radius:12px;background:var(--bg);display:grid;place-items:center;font-size:26px;overflow:hidden}
+  .titem .ic img{width:100%;height:100%;object-fit:cover}
+  .titem .meta{min-width:0;display:grid;gap:6px}
+  .titem b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .throwbar{display:flex;gap:6px;flex-wrap:wrap}
+  .throwbar button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:9px 12px;font-weight:600;cursor:pointer;font-size:14px}
+  .throwbar button.all{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .throwbar button:hover{border-color:var(--accent)}
+  .throwbar .del{margin-left:auto;color:var(--muted);font-weight:500}
+  .sent{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .titem.flying{animation:fly .6s ease-in}
+  @keyframes fly{40%{transform:translateY(-10px) scale(1.02);border-color:var(--gold)}}
+  .contacts{display:grid;gap:8px}
+  .ct{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .ct b{display:block}
+  .ct small{color:var(--muted)}
+  #toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top,0px));z-index:30;background:var(--accent);color:var(--accent-fg);border-radius:14px;padding:12px 14px 12px 18px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 40px rgba(0,0,0,.3);max-width:calc(100vw - 32px)}
+  #toast button{background:#fff;color:#0f6b4f;border:0;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+  #toast .x{background:transparent;color:inherit;font-size:18px;padding:4px 8px}
+  .lock{max-width:480px}
+  @media (prefers-reduced-motion:reduce){.titem.flying{animation:none}}
+</style>
+</head>
+<body>
+<section class="wrap wide">
+  <div class="brand" data-logos></div>
+  <div class="eyebrow">Throw console</div>
+  <h1 class="pagetitle" id="title">Throw</h1>
+  <p class="notice bad" id="note" hidden></p>
+
+  <div class="panel lock" id="lock" hidden>
+    <h2>Sign in</h2>
+    <p class="muted">Enter the organiser PIN or this programme's coordinator PIN.</p>
+    <form id="pinForm" class="row" novalidate><input type="password" id="pin" placeholder="PIN" aria-label="PIN"><button class="btn" type="submit">Open console</button></form>
+    <div class="err" id="pinErr" role="alert"></div>
+  </div>
+
+  <div class="cols" id="console" hidden>
+    <!-- room -->
+    <div style="display:grid;gap:16px">
+      <div class="panel">
+        <h2>The room</h2>
+        <div class="roomq" id="roomQr"></div>
+        <p class="muted small" style="margin:0">Participants who checked in already have this page. Others scan this, or open:</p>
+        <code id="roomUrl" style="font-family:var(--mono);font-size:13px;word-break:break-all"></code>
+        <button class="btn ghost small" id="copyRoom" type="button">Copy room link</button>
+        <div><span class="big-n" id="nAll">0</span> <span class="muted">phones connected</span></div>
+        <div class="split"><span>Group A: <b id="nA">0</b></span><span>Group B: <b id="nB">0</b></span><span>No group: <b id="nN">0</b></span></div>
+      </div>
+      <div class="panel">
+        <h2>Contacts shared with you</h2>
+        <p class="muted small" style="margin:0">When a participant sends their contact, you get an alert here.</p>
+        <div class="row"><button class="btn small" id="saveAll" type="button">Save all to my contacts</button></div>
+        <div class="contacts" id="contacts"></div>
+      </div>
+    </div>
+
+    <!-- throwables -->
+    <div style="display:grid;gap:16px;min-width:0">
+      <details class="panel" id="cardPanel">
+        <summary>My contact card</summary>
+        <p class="muted small" style="margin:0">Saved on this device. Participants can save it to their phone, follow you, and send their own contact back.</p>
+        <form id="cardForm" class="grid2" novalidate>
+          <label class="f">Title<input type="text" name="title" placeholder="Dr"></label>
+          <label class="f">Full name<input type="text" name="name" placeholder="Babajide Arulogun"></label>
+          <label class="f">Role<input type="text" name="role" placeholder="Head, Digital Learning Unit"></label>
+          <label class="f">Organisation<input type="text" name="org" placeholder="PSSDC"></label>
+          <label class="f">Phone<input type="tel" name="phone" placeholder="0803…"></label>
+          <label class="f">WhatsApp<input type="tel" name="whatsapp" placeholder="Same as phone, or another number"></label>
+          <label class="f">Email<input type="email" name="email"></label>
+          <label class="f">Website<input type="text" name="website" placeholder="agileplus.ng"></label>
+          <label class="f">LinkedIn<input type="text" name="linkedin" placeholder="profile link or name"></label>
+          <label class="f">X (Twitter)<input type="text" name="x" placeholder="@handle"></label>
+          <label class="f">Instagram<input type="text" name="instagram" placeholder="@handle"></label>
+          <label class="f">Facebook<input type="text" name="facebook" placeholder="profile link or name"></label>
+          <label class="f">TikTok<input type="text" name="tiktok" placeholder="@handle"></label>
+          <label class="f">YouTube<input type="text" name="youtube" placeholder="@channel"></label>
+          <button class="btn full" type="submit">Add my card to the throw list</button>
+          <div class="err full" id="cardErr" role="status"></div>
+        </form>
+      </details>
+
+      <div class="panel">
+        <h2>Add things to throw</h2>
+        <div class="row">
+          <label class="btn" for="files">Add slides or case studies</label>
+          <input type="file" id="files" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.docx,.pptx,.xlsx" multiple hidden>
+          <button class="btn ghost" id="addLink" type="button">Add a link</button>
+        </div>
+        <form id="linkForm" class="row" hidden novalidate>
+          <input type="text" id="linkTitle" placeholder="Title, e.g. Lagos State Open Data">
+          <input type="url" id="linkUrl" placeholder="https://…">
+          <button class="btn small" type="submit">Add</button>
+        </form>
+        <span class="muted small">PDFs and pictures up to 25 MB. Throw <b>←</b> to Group A, <b>↑</b> to everyone, or <b>→</b> to Group B.</span>
+        <div class="err" id="addErr" role="status"></div>
+      </div>
+
+      <div class="tlist" id="tlist"></div>
+    </div>
+  </div>
+</section>
+
+<div id="toast" hidden><span id="toastTxt"></span><button id="toastSave" type="button">Save</button><button class="x" id="toastX" type="button" aria-label="Dismiss">×</button></div>
+
+<template id="logosTpl">
+  <div class="logos">
+    <img src="../assets/pssdc-logo.png" alt="PSSDC" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+    <img src="../assets/lagos-logo.png" alt="Lagos State Government" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+  </div>
+</template>
+
+<script src="../config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="../vcard.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ss = { get(k) { try { return sessionStorage.getItem(k); } catch { return null; } }, set(k, v) { try { sessionStorage.setItem(k, v); } catch {} } };
+  const ls = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+  document.querySelectorAll("[data-logos]").forEach(el => el.appendChild($("logosTpl").content.cloneNode(true)));
+  const cfg = window.TAPIN_CONFIG || {};
+  const sb = window.supabase && cfg.SUPABASE_URL ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+  const code = location.hash.replace("#", "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const ROOM = new URL("../room/", location.href).href + "#" + code;
+  const KIND = { image: "🖼️", file: "📄", contact: "👤", link: "🔗" };
+  let prog = null, pin = "", channel = null, throwsList = [], contacts = [], rowGroups = new Map();
+
+  function note(t) { $("note").hidden = !t; $("note").textContent = t || ""; }
+  function qrSvg(t) { if (!window.qrcode) return ""; const q = window.qrcode(0, "M"); q.addData(t); q.make(); return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
+
+  // ---------- access ----------
+  async function check(p) { const { data } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p }); return data || null; }
+  async function boot() {
+    if (!sb) return note("Can't reach the database. Check the connection.");
+    if (!code) return note("Open the Throw console from your programme on the menu page.");
+    const { data } = await sb.from("programmes").select("*").eq("code", code).maybeSingle();
+    prog = data;
+    if (!prog) return note("Programme not found. Open the Throw console from the menu page.");
+    $("title").textContent = prog.name;
+    for (const p of [ss.get("tapin_pin"), ss.get("tapin_cpin_" + code)].filter(Boolean)) {
+      if (await check(p)) { pin = p; return open(); }
+    }
+    $("lock").hidden = false;
+  }
+  $("pinForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const p = $("pin").value; $("pinErr").textContent = "Checking…";
+    const role = await check(p);
+    if (!role) return ($("pinErr").textContent = "That PIN is wrong for this programme.");
+    ss.set(role === "organiser" ? "tapin_pin" : "tapin_cpin_" + code, p);
+    pin = p; $("lock").hidden = true; open();
+  });
+
+  async function open() {
+    $("console").hidden = false;
+    if (prog.status !== "open") note("This programme is closed. Participants can still open what you threw before, but can't share contacts.");
+    $("roomQr").innerHTML = qrSvg(ROOM); $("roomUrl").textContent = ROOM;
+    fillCard();
+    await Promise.all([loadThrows(), loadContacts()]);
+    channel = sb.channel("room-" + code, { config: { broadcast: { self: false }, presence: { key: "console-" + crypto.randomUUID() } } });
+    channel.on("presence", { event: "sync" }, () => {
+      const st = channel.presenceState(); let a = 0, b = 0, n = 0;
+      Object.values(st).forEach(arr => arr.forEach(p => { if (p.console) return; if (p.group === "A") a++; else if (p.group === "B") b++; else n++; }));
+      $("nAll").textContent = a + b + n; $("nA").textContent = a; $("nB").textContent = b; $("nN").textContent = n;
+    });
+    channel.on("broadcast", { event: "contact" }, ({ payload }) => { alertContact(payload); loadContacts(); });
+    channel.subscribe(st => { if (st === "SUBSCRIBED") channel.track({ console: true }); });
+  }
+  $("copyRoom").addEventListener("click", async () => { try { await navigator.clipboard.writeText(ROOM); $("copyRoom").textContent = "Copied"; } catch { $("copyRoom").textContent = ROOM; } setTimeout(() => ($("copyRoom").textContent = "Copy room link"), 2000); });
+
+  // ---------- my contact card ----------
+  const CARD_KEY = "throw_mycard";
+  function fillCard() {
+    const c = ls.get(CARD_KEY) || {};
+    const f = $("cardForm");
+    Object.entries(c).forEach(([k, v]) => { if (f.elements[k]) f.elements[k].value = v; });
+    if (!c.name) $("cardPanel").open = true;
+  }
+  $("cardForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const c = Object.fromEntries(new FormData($("cardForm")).entries());
+    Object.keys(c).forEach(k => (c[k] = String(c[k]).trim()));
+    if (c.name.length < 2) return ($("cardErr").textContent = "Enter your name.");
+    if (!c.phone && !c.email) return ($("cardErr").textContent = "Add at least a phone number or an email.");
+    ls.set(CARD_KEY, c);
+    $("cardErr").textContent = "Adding your card…";
+    c.note = "Met at " + prog.name;
+    const vcf = VCard.build(c);
+    const path = `${code}/contact-${crypto.randomUUID()}.vcf`;
+    const up = await sb.storage.from("throws").upload(path, new Blob([vcf], { type: "text/vcard" }), { contentType: "text/vcard" });
+    if (up.error) return ($("cardErr").textContent = "Couldn't save the card file. Check the connection.");
+    const url = sb.storage.from("throws").getPublicUrl(path).data.publicUrl;
+    const title = [c.title, c.name].filter(Boolean).join(" ");
+    const { error } = await sb.rpc("prepare_throw", { p_pin: pin, p_programme: prog.id, p_kind: "contact", p_title: title, p_url: url, p_payload: c });
+    $("cardErr").textContent = error ? "Couldn't add the card. Has the database upgrade (upgrade-4-throw.sql) been run?" : "Your card is in the throw list below.";
+    if (!error) { $("cardPanel").open = false; loadThrows(); }
+  });
+
+  // ---------- adding files and links ----------
+  $("files").addEventListener("change", async e => {
+    const files = [...e.target.files]; e.target.value = "";
+    for (const f of files) {
+      if (f.size > 25 * 1024 * 1024) { $("addErr").textContent = `${f.name} is over 25 MB. Make it smaller first.`; continue; }
+      $("addErr").textContent = `Uploading ${f.name}…`;
+      const safe = f.name.replace(/[^\w.\- ]+/g, "").replace(/\s+/g, "-").slice(-80);
+      const path = `${code}/${crypto.randomUUID()}-${safe}`;
+      const up = await sb.storage.from("throws").upload(path, f, { contentType: f.type || "application/octet-stream" });
+      if (up.error) { $("addErr").textContent = `Couldn't upload ${f.name}.`; continue; }
+      const url = sb.storage.from("throws").getPublicUrl(path).data.publicUrl;
+      const kind = /^image\//.test(f.type) ? "image" : "file";
+      const title = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+      const { error } = await sb.rpc("prepare_throw", { p_pin: pin, p_programme: prog.id, p_kind: kind, p_title: title, p_url: url, p_payload: { type: f.type, size: f.size } });
+      $("addErr").textContent = error ? `Couldn't add ${f.name}.` : `${f.name} added.`;
+    }
+    loadThrows();
+  });
+  $("addLink").addEventListener("click", () => { $("linkForm").hidden = !$("linkForm").hidden; });
+  $("linkForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    let url = $("linkUrl").value.trim(); const title = $("linkTitle").value.trim() || url;
+    if (!url) return; if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const { error } = await sb.rpc("prepare_throw", { p_pin: pin, p_programme: prog.id, p_kind: "link", p_title: title, p_url: url, p_payload: {} });
+    $("addErr").textContent = error ? "Couldn't add the link." : "Link added.";
+    if (!error) { $("linkForm").reset(); $("linkForm").hidden = true; loadThrows(); }
+  });
+
+  // ---------- throw list ----------
+  async function loadThrows() {
+    const { data, error } = await sb.rpc("list_throws", { p_pin: pin, p_programme: prog.id });
+    if (error) { note("Couldn't load the throw list. Has the database upgrade (upgrade-4-throw.sql) been run?"); return; }
+    throwsList = data || [];
+    renderThrows();
+  }
+  function renderThrows() {
+    // One row per thing you added; re-throwing it sends a copy, so count the copies that went out.
+    const groups = new Map();
+    throwsList.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(t => {
+      const k = t.url || t.id;
+      if (!groups.has(k)) groups.set(k, { first: t, n: 0, ids: [] });
+      const g = groups.get(k); g.ids.push(t.id); if (t.sent_at) g.n++;
+    });
+    rowGroups = groups;
+    const prepared = [...groups.values()].reverse().map(g => g.first);
+    const sends = url => (groups.get(url) || { n: 0 }).n;
+    $("tlist").innerHTML = prepared.length ? prepared.map(t => {
+      const thumb = t.kind === "image" ? `<img src="${esc(t.url)}" alt="" loading="lazy">` : KIND[t.kind];
+      const n = sends(t.url);
+      return `<div class="titem" data-id="${esc(t.id)}"><div class="ic">${thumb}</div><div class="meta">
+        <b>${esc(t.title)}</b>
+        <span class="sent">${t.kind === "contact" ? "Contact card" : t.kind === "image" ? "Picture" : t.kind === "link" ? "Link" : "Document"}${n ? ` · thrown ${n}×` : " · not thrown yet"}</span>
+        <div class="throwbar"><button data-t="A" type="button">← Group A</button><button class="all" data-t="all" type="button">↑ Everyone</button><button data-t="B" type="button">Group B →</button><button class="del" data-del type="button" title="Also removes it from participants' phones">Remove</button></div>
+      </div></div>`;
+    }).join("") : `<p class="muted">Nothing to throw yet. Add your contact card, slides or case studies above.</p>`;
+  }
+  $("tlist").addEventListener("click", async e => {
+    const card = e.target.closest(".titem"); if (!card) return;
+    const id = card.dataset.id;
+    if (e.target.matches("[data-del]")) {
+      if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Tap again to remove"; return; }
+      const t = throwsList.find(x => x.id === id), g = rowGroups.get(t?.url || id);
+      for (const tid of (g ? g.ids : [id])) await sb.rpc("delete_throw", { p_pin: pin, p_throw: tid });
+      return loadThrows();
+    }
+    const b = e.target.closest("button[data-t]"); if (!b) return;
+    b.disabled = true;
+    const { data, error } = await sb.rpc("send_throw", { p_pin: pin, p_throw: id, p_target: b.dataset.t });
+    b.disabled = false;
+    if (error || !data) { $("addErr").textContent = "Couldn't throw that. Check the connection."; return; }
+    const from = b.dataset.t === "A" ? "left" : b.dataset.t === "B" ? "right" : "top";
+    channel?.send({ type: "broadcast", event: "throw", payload: { id: data.id, target: data.target, from } });
+    card.classList.remove("flying"); void card.offsetWidth; card.classList.add("flying");
+    swoosh();
+    loadThrows();
+  });
+
+  // ---------- incoming contacts ----------
+  async function loadContacts() {
+    const { data, error } = await sb.rpc("list_shared_contacts", { p_pin: pin, p_programme: prog.id });
+    if (error) return;
+    contacts = data || [];
+    $("contacts").innerHTML = contacts.length ? contacts.map(c => `<div class="ct"><div><b>${esc([c.title, c.name].filter(Boolean).join(" "))}</b><small>${esc([c.mda, c.phone, c.email].filter(Boolean).join(" · "))}</small></div><button class="btn small ghost" data-id="${esc(c.id)}" type="button">Save</button></div>`).join("")
+      : `<p class="muted small" style="margin:0">None yet.</p>`;
+    $("saveAll").disabled = !contacts.length;
+  }
+  const toVcard = c => VCard.build({ title: c.title, name: c.name, org: c.mda, phone: c.phone, email: c.email, ...(c.socials || {}), note: "Met at " + prog.name });
+  $("contacts").addEventListener("click", e => { const b = e.target.closest("button[data-id]"); if (!b) return; const c = contacts.find(x => x.id === b.dataset.id); if (c) VCard.download(VCard.fileName(c.name), toVcard(c)); });
+  $("saveAll").addEventListener("click", () => { if (contacts.length) VCard.download(VCard.fileName(prog.name + " contacts"), contacts.map(toVcard).join("")); });
+
+  let toastFor = null;
+  async function alertContact(p) {
+    $("toastTxt").textContent = `${p?.name || "A participant"} shared their contact`;
+    $("toast").hidden = false; ping(); try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch {}
+    toastFor = p?.name || null;
+    clearTimeout(alertContact.t); alertContact.t = setTimeout(() => ($("toast").hidden = true), 15000);
+  }
+  $("toastX").addEventListener("click", () => ($("toast").hidden = true));
+  $("toastSave").addEventListener("click", async () => {
+    await loadContacts();
+    const c = contacts[0]; // newest first
+    if (c) VCard.download(VCard.fileName(c.name), toVcard(c));
+    $("toast").hidden = true;
+  });
+
+  // ---------- sounds ----------
+  let actx = null;
+  function ctx() { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = actx || new AC(); if (actx.state === "suspended") actx.resume(); return actx; }
+  document.addEventListener("pointerdown", ctx, { once: true });
+  function swoosh() {
+    const a = ctx(); if (!a) return;
+    const n = a.createBuffer(1, a.sampleRate * 0.5, a.sampleRate), d = n.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const s = a.createBufferSource(); s.buffer = n; const bp = a.createBiquadFilter(); bp.type = "bandpass"; const g = a.createGain(), t = a.currentTime;
+    bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(3800, t + 0.35);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.8, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    s.connect(bp).connect(g).connect(a.destination); s.start(t); s.stop(t + 0.45);
+  }
+  function ping() {
+    const a = ctx(); if (!a) return; const t = a.currentTime;
+    [880, 1320].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + i * 0.12); g.gain.exponentialRampToValueAtTime(0.3, t + i * 0.12 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.3); o.connect(g).connect(a.destination); o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.32); });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

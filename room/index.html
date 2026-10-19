@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f6b4f">
+<title>Session Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* Participant's phone: their "pocket" for the session. Thrown items fly in over a dark veil and are swiped down into the pocket. */
+  body{min-height:100%;overscroll-behavior-y:contain}
+  .wrap{padding-bottom:110px}
+  .hello{font-family:var(--display);font-weight:800;font-size:clamp(26px,7vw,36px);margin:4px 0 0}
+  .hello .yo{color:var(--accent)}
+  .groups{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:5px;margin-top:14px}
+  .groups button{flex:1;border:0;border-radius:10px;padding:10px 6px;background:transparent;color:var(--muted);font-weight:600;cursor:pointer;font-size:14px}
+  .groups button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+  .items{display:grid;gap:10px;margin-top:12px}
+  .item{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--fg);width:100%}
+  .item .ic{width:52px;height:52px;border-radius:12px;display:grid;place-items:center;font-size:24px;background:var(--bg);overflow:hidden}
+  .item .ic img{width:100%;height:100%;object-fit:cover}
+  .item b{display:block;font-size:15px;line-height:1.3}
+  .item small{color:var(--muted);font-size:12px}
+  .item .go{color:var(--accent);font-weight:600;font-size:14px}
+  .item.new{animation:land .7s ease-out}
+  @keyframes land{0%{transform:translateY(-14px);border-color:var(--gold)}100%{transform:none}}
+  .empty{color:var(--muted);text-align:center;padding:28px 10px;border:1px dashed var(--line);border-radius:14px}
+  .pocket{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:12px 20px;font-weight:700;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:5}
+  .pocket .n{background:rgba(255,255,255,.25);border-radius:999px;padding:1px 9px;font-family:var(--mono)}
+  .pocket.bump{animation:bump .5s}
+  @keyframes bump{40%{transform:translateX(-50%) scale(1.15)}}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .live i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .live.on i{background:#3fb98a;box-shadow:0 0 0 4px rgba(63,185,138,.2)}
+
+  /* join gate */
+  #gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;padding:24px}
+  #gate .box{max-width:420px;width:100%;display:grid;gap:14px;text-align:center}
+
+  /* incoming throw */
+  #veil{position:fixed;inset:0;z-index:10;background:rgba(6,12,10,.86);display:grid;place-items:center;touch-action:none}
+  #flyer{width:min(82vw,360px);background:#fff;color:#14211c;border-radius:20px;padding:16px;box-shadow:0 30px 80px rgba(0,0,0,.5);display:grid;gap:10px;text-align:center;will-change:transform}
+  #flyer .thumb{border-radius:12px;overflow:hidden;background:#eef2ef;min-height:120px;display:grid;place-items:center;font-size:54px}
+  #flyer .thumb img{width:100%;max-height:46vh;object-fit:contain;display:block}
+  #flyer h3{font-size:20px;color:#14211c}
+  #flyer .kind{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#0f6b4f}
+  .catchhint{color:#eef4ef;text-align:center;margin-top:18px;display:grid;gap:8px;justify-items:center}
+  .catchhint .arrow{font-size:34px;animation:nudge 1.1s infinite}
+  @keyframes nudge{50%{transform:translateY(10px)}}
+  .flyin-left{animation:fromL .75s cubic-bezier(.2,.9,.25,1.15) both}
+  .flyin-right{animation:fromR .75s cubic-bezier(.2,.9,.25,1.15) both}
+  .flyin-top{animation:fromT .75s cubic-bezier(.2,.9,.25,1.15) both}
+  @keyframes fromL{from{transform:translate(-120vw,-30vh) rotate(-35deg) scale(.4)}to{transform:none}}
+  @keyframes fromR{from{transform:translate(120vw,-30vh) rotate(35deg) scale(.4)}to{transform:none}}
+  @keyframes fromT{from{transform:translateY(-110vh) rotate(-12deg) scale(.4)}to{transform:none}}
+  @media (prefers-reduced-motion:reduce){.flyin-left,.flyin-right,.flyin-top,.item.new,.pocket.bump,.catchhint .arrow{animation:none}}
+
+  /* viewers */
+  #viewer{position:fixed;inset:0;z-index:15;background:var(--bg);overflow-y:auto}
+  #viewer .bar{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:calc(10px + env(safe-area-inset-top,0px)) 10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--bg);border-bottom:1px solid var(--line);z-index:1}
+  #viewer .body{padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:640px;margin:0 auto;display:grid;gap:14px}
+  #viewer img.full{width:100%;border-radius:12px;background:#fff}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:12px}
+  .who{display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:center}
+  .avatar{width:64px;height:64px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:24px;overflow:hidden}
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .who b{font-family:var(--display);font-size:20px;display:block}
+  .lines{display:grid;gap:8px}
+  .lines a{color:var(--fg);text-decoration:none;display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+  .follows{display:flex;flex-wrap:wrap;gap:8px}
+  .follows a{padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--fg);text-decoration:none;font-weight:600;font-size:14px}
+  .share form{display:grid;gap:12px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:420px){.two{grid-template-columns:1fr}}
+  .ok{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <div class="brand center" data-logos></div>
+    <div class="eyebrow" id="gProg">Session room</div>
+    <h1 class="pagetitle" style="font-size:34px">Ẹ káàbọ̀ <span class="sub">You are welcome</span></h1>
+    <p class="muted" id="gMsg">Slides, case studies and contact cards from your facilitator will land here.</p>
+    <div class="groups" id="gGroups" role="group" aria-label="Where are you sitting?">
+      <button type="button" data-g="A">Group A</button>
+      <button type="button" data-g="all" aria-pressed="true">Not sure</button>
+      <button type="button" data-g="B">Group B</button>
+    </div>
+    <span class="muted small">Your group, if the facilitator gave you one. You can change it later.</span>
+    <button class="btn big" id="joinBtn" type="button">Join the session</button>
+    <div class="err" id="gErr" role="alert"></div>
+  </div>
+</div>
+
+<section class="wrap" id="main" hidden>
+  <div class="brand" data-logos></div>
+  <div class="eyebrow" id="prog"></div>
+  <div class="hello" id="hello"><span class="yo">Ẹ káàbọ̀</span></div>
+  <div class="row" style="justify-content:space-between;margin-top:6px">
+    <span class="live" id="live"><i></i><span>Connecting…</span></span>
+  </div>
+  <div class="groups" id="groups" role="group" aria-label="Your group">
+    <button type="button" data-g="A">Group A</button>
+    <button type="button" data-g="all">Everyone</button>
+    <button type="button" data-g="B">Group B</button>
+  </div>
+  <h2 style="font-size:20px;margin-top:22px">My items</h2>
+  <div class="items" id="items"></div>
+</section>
+
+<button class="pocket" id="pocket" type="button" hidden>👜 My items <span class="n" id="pocketN">0</span></button>
+
+<div id="veil" hidden>
+  <div>
+    <div id="flyer">
+      <div class="kind" id="fKind"></div>
+      <div class="thumb" id="fThumb"></div>
+      <h3 id="fTitle"></h3>
+    </div>
+    <div class="catchhint"><div class="arrow">⬇</div><div>Swipe down to catch it</div><button class="btn ghost small" id="catchBtn" type="button" style="color:#eef4ef;border-color:rgba(255,255,255,.3)">Or tap to catch</button></div>
+  </div>
+</div>
+
+<div id="viewer" hidden>
+  <div class="bar"><button class="btn ghost small" id="vBack" type="button">← My items</button><span class="muted small" id="vKind"></span></div>
+  <div class="body" id="vBody"></div>
+</div>
+
+<template id="logosTpl">
+  <div class="logos">
+    <img src="../assets/pssdc-logo.png" alt="PSSDC" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+    <img src="../assets/lagos-logo.png" alt="Lagos State Government" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+  </div>
+</template>
+
+<script src="../config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="../vcard.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+  document.querySelectorAll("[data-logos]").forEach(el => el.appendChild($("logosTpl").content.cloneNode(true)));
+  const cfg = window.TAPIN_CONFIG || {};
+  const sb = window.supabase && cfg.SUPABASE_URL ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+  const code = location.hash.replace("#", "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let prog = null, channel = null, group = store.get("room_group_" + code) || "all";
+  let items = [];                                  // thrown items, newest first
+  const caught = new Set(store.get("room_caught_" + code) || []);
+  const mine = store.get("tapin_mine_" + code);    // set by Tap-In check-in on this phone
+  const fullName = e => (e.title === "Miss" ? "Miss " : e.title ? e.title + ". " : "") + e.name;
+  const KIND = { image: ["🖼️", "Slide"], file: ["📄", "Document"], contact: ["👤", "Contact card"], link: ["🔗", "Link"] };
+
+  // ---------- gate: one tap to join also unlocks sound and vibration ----------
+  function pickGroup(container, g) {
+    container.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === g));
+  }
+  pickGroup($("gGroups"), group);
+  $("gGroups").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { group = b.dataset.g; pickGroup($("gGroups"), group); } });
+  $("groups").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    group = b.dataset.g; pickGroup($("groups"), group); store.set("room_group_" + code, group);
+    channel?.track({ group }); render();
+  });
+
+  async function boot() {
+    if (!sb) { $("gErr").textContent = "Can't reach the service. Check the internet connection."; return; }
+    if (!code) { $("gMsg").textContent = "Scan the room QR code shown by your facilitator, or open the link they shared."; $("joinBtn").hidden = true; $("gGroups").hidden = true; return; }
+    const { data } = await sb.from("programmes").select("id,code,name,status").eq("code", code).maybeSingle();
+    prog = data;
+    if (!prog) { $("gMsg").textContent = "This room link isn't valid. Check the code with your facilitator."; $("joinBtn").hidden = true; $("gGroups").hidden = true; return; }
+    $("gProg").textContent = prog.name; $("prog").textContent = prog.name;
+    if (mine) $("hello").innerHTML = `<span class="yo">Ẹ káàbọ̀</span>, ${esc(fullName(mine))}`;
+    if (store.get("room_joined_" + code)) join();
+  }
+  $("joinBtn").addEventListener("click", () => { unlockAudio(); join(); });
+
+  async function join() {
+    store.set("room_joined_" + code, true); store.set("room_group_" + code, group);
+    $("gate").hidden = true; $("main").hidden = false; $("pocket").hidden = false;
+    pickGroup($("groups"), group);
+    await loadItems(); render();
+    channel = sb.channel("room-" + code, { config: { broadcast: { self: false }, presence: { key: crypto.randomUUID() } } });
+    channel.on("broadcast", { event: "throw" }, ({ payload }) => incoming(payload));
+    channel.subscribe(async st => {
+      const live = $("live");
+      if (st === "SUBSCRIBED") { live.classList.add("on"); live.lastChild.textContent = "Connected · ready to catch"; channel.track({ group, name: mine ? fullName(mine) : "" }); }
+      else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") { live.classList.remove("on"); live.lastChild.textContent = "Reconnecting…"; }
+    });
+    keepAwake();
+    // Catch up on anything missed while the page was closed or the phone slept.
+    document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible") { keepAwake(); const before = items.length; await loadItems(); if (items.length > before) render(); } });
+  }
+
+  async function loadItems() {
+    const { data } = await sb.from("throws").select("*").eq("programme_id", prog.id).not("sent_at", "is", null).order("sent_at", { ascending: false }).limit(200);
+    items = data || [];
+  }
+  const forMe = t => t.target === "all" || group === "all" || t.target === group;
+
+  function render() {
+    const list = items.filter(forMe);
+    $("pocketN").textContent = list.length;
+    $("items").innerHTML = list.length ? list.map(t => {
+      const [ic, label] = KIND[t.kind] || ["📦", "Item"];
+      const thumb = t.kind === "image" && t.url ? `<img src="${esc(t.url)}" alt="" loading="lazy">` : ic;
+      return `<button class="item${caught.has(t.id) ? "" : " new"}" data-id="${esc(t.id)}" type="button"><span class="ic">${thumb}</span><span><b>${esc(t.title || label)}</b><small>${label} · ${new Date(t.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></span><span class="go">Open</span></button>`;
+    }).join("") : `<div class="empty">Nothing yet. When your facilitator throws a slide, case study or contact card, it flies onto this screen. Keep this page open.</div>`;
+  }
+  $("items").addEventListener("click", e => { const b = e.target.closest(".item"); if (b) openItem(items.find(t => t.id === b.dataset.id)); });
+  $("pocket").addEventListener("click", () => { $("viewer").hidden = true; scrollTo({ top: $("items").offsetTop - 80, behavior: "smooth" }); });
+
+  // ---------- incoming throw ----------
+  const queue = []; let showing = false;
+  async function incoming(p) {
+    if (!p || !p.id) return;
+    if (p.target && p.target !== "all" && group !== "all" && p.target !== group) return;
+    const { data } = await sb.from("throws").select("*").eq("id", p.id).maybeSingle();
+    if (!data) return;
+    if (!items.some(t => t.id === data.id)) items.unshift(data);
+    queue.push({ item: data, from: p.from || "top" });
+    nextFlyer();
+  }
+  function nextFlyer() {
+    if (showing || !queue.length) return;
+    showing = true;
+    const { item, from } = queue.shift();
+    const [ic, label] = KIND[item.kind] || ["📦", "Item"];
+    $("fKind").textContent = label;
+    $("fTitle").textContent = item.title || label;
+    $("fThumb").innerHTML = item.kind === "image" && item.url ? `<img src="${esc(item.url)}" alt="">` : ic;
+    const f = $("flyer"); f.style.transform = ""; f.style.transition = ""; f.className = "";
+    $("veil").hidden = false; void f.offsetWidth;
+    f.className = from === "left" ? "flyin-left" : from === "right" ? "flyin-right" : "flyin-top";
+    swoosh(); buzz([30, 40, 60]);
+    flyerItem = item;
+    clearTimeout(autoCatch); autoCatch = setTimeout(() => catchIt(), 25000);
+  }
+  let flyerItem = null, autoCatch = null;
+  function catchIt() {
+    if (!flyerItem) return;
+    clearTimeout(autoCatch);
+    const f = $("flyer"), item = flyerItem; flyerItem = null;
+    caught.add(item.id); store.set("room_caught_" + code, [...caught].slice(-300));
+    f.className = ""; f.style.transition = reduced ? "none" : "transform .45s cubic-bezier(.6,0,.4,1), opacity .45s";
+    f.style.transform = "translateY(70vh) scale(.15)"; f.style.opacity = "0";
+    buzz(20);
+    setTimeout(() => {
+      $("veil").hidden = true; f.style.opacity = ""; f.style.transform = "";
+      render(); const p = $("pocket"); p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump");
+      showing = false; nextFlyer();
+    }, reduced ? 0 : 460);
+  }
+  $("catchBtn").addEventListener("click", catchIt);
+  // swipe down to catch
+  let sy = 0, dragging = false;
+  $("veil").addEventListener("touchstart", e => { sy = e.touches[0].clientY; dragging = true; $("flyer").className = ""; }, { passive: true });
+  $("veil").addEventListener("touchmove", e => {
+    if (!dragging) return; const dy = Math.max(0, e.touches[0].clientY - sy);
+    $("flyer").style.transition = "none"; $("flyer").style.transform = `translateY(${dy}px) rotate(${dy / 30}deg)`;
+  }, { passive: true });
+  $("veil").addEventListener("touchend", e => {
+    if (!dragging) return; dragging = false;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (dy > 80) catchIt(); else { $("flyer").style.transition = "transform .3s"; $("flyer").style.transform = ""; }
+  });
+  // mouse drag for laptops
+  $("veil").addEventListener("mousedown", e => { if (e.target.closest("#catchBtn")) return; sy = e.clientY; dragging = true; });
+  addEventListener("mouseup", e => { if (dragging) { dragging = false; if (e.clientY - sy > 80) catchIt(); } });
+
+  // ---------- opening an item ----------
+  function openItem(t) {
+    if (!t) return;
+    caught.add(t.id); store.set("room_caught_" + code, [...caught].slice(-300));
+    const [, label] = KIND[t.kind] || ["", "Item"];
+    $("vKind").textContent = label;
+    const body = $("vBody");
+    if (t.kind === "image") body.innerHTML = `<h2>${esc(t.title)}</h2><img class="full" src="${esc(t.url)}" alt="${esc(t.title)}"><a class="btn" href="${esc(t.url)}" target="_blank" rel="noopener">Open full size</a>`;
+    else if (t.kind === "file") body.innerHTML = `<h2>${esc(t.title)}</h2><div class="card"><p class="muted">A document from your facilitator.</p><a class="btn big" href="${esc(t.url)}" target="_blank" rel="noopener">Open document</a></div>`;
+    else if (t.kind === "link") body.innerHTML = `<h2>${esc(t.title)}</h2><div class="card"><code style="word-break:break-all">${esc(t.url)}</code><a class="btn big" href="${esc(t.url)}" target="_blank" rel="noopener">Open link</a></div>`;
+    else if (t.kind === "contact") body.innerHTML = contactView(t);
+    $("viewer").hidden = false; $("viewer").scrollTop = 0;
+    if (t.kind === "contact") wireShare(t);
+  }
+  $("vBack").addEventListener("click", () => { $("viewer").hidden = true; });
+
+  function contactView(t) {
+    const c = t.payload || {};
+    const links = VCard.socialLinks(c);
+    return `<div class="card">
+      <div class="who"><div class="avatar">${c.photo ? `<img src="${esc(c.photo)}" alt="">` : esc(VCard.initials(c.name))}</div>
+        <div><b>${esc(c.name)}</b><span class="muted">${esc([c.role, c.org].filter(Boolean).join(" · "))}</span></div></div>
+      <div class="lines">
+        ${c.phone ? `<a href="tel:${esc(c.phone)}">📞 <span>${esc(c.phone)}</span></a>` : ""}
+        ${c.email ? `<a href="mailto:${esc(c.email)}">✉️ <span>${esc(c.email)}</span></a>` : ""}
+      </div>
+      ${t.url ? `<a class="btn big" href="${esc(t.url)}">Save to my contacts</a>` : ""}
+      ${links.length ? `<div><div class="eyebrow" style="margin-bottom:8px">Follow</div><div class="follows">${links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}</div></div>` : ""}
+    </div>
+    <div class="card share" id="shareCard">
+      <h3 style="font-size:19px">Share your contact with ${esc((c.name || "the facilitator").split(" ")[0])}</h3>
+      <p class="muted" style="margin:0">Optional. Only the facilitator and programme coordinator receive it.</p>
+      <form id="shareForm" novalidate>
+        <div class="two">
+          <label class="f">Title<input type="text" name="title" value="${esc(mine?.title || "")}" placeholder="Dr, Mr, Mrs…"></label>
+          <label class="f">Full name<input type="text" name="name" value="${esc(mine?.name || "")}" required></label>
+        </div>
+        <label class="f">MDA / organisation<input type="text" name="mda" value="${esc(mine?.mda || "")}"></label>
+        <div class="two">
+          <label class="f">Phone<input type="tel" name="phone" inputmode="tel" placeholder="080…"></label>
+          <label class="f">Email<input type="email" name="email" inputmode="email"></label>
+        </div>
+        <div class="two">
+          <label class="f">LinkedIn<input type="text" name="linkedin" placeholder="profile link or name"></label>
+          <label class="f">X (Twitter)<input type="text" name="x" placeholder="@handle"></label>
+          <label class="f">Instagram<input type="text" name="instagram" placeholder="@handle"></label>
+          <label class="f">Facebook<input type="text" name="facebook" placeholder="profile link or name"></label>
+        </div>
+        <div class="err" id="shareErr" role="alert"></div>
+        <button class="btn big" type="submit">Send my contact</button>
+      </form>
+    </div>`;
+  }
+  function wireShare(t) {
+    const f = $("shareForm"); if (!f) return;
+    const sent = store.get("room_shared_" + code);
+    if (sent) { $("shareCard").innerHTML = `<p class="ok">✓ You shared your contact${sent.at ? " at " + sent.at : ""}.</p><button class="btn ghost small" id="reshare" type="button">Send an updated contact</button>`; $("reshare").onclick = () => { store.set("room_shared_" + code, null); openItem(t); }; return; }
+    f.addEventListener("submit", async e => {
+      e.preventDefault();
+      const v = Object.fromEntries(new FormData(f).entries());
+      Object.keys(v).forEach(k => (v[k] = String(v[k]).trim()));
+      if (v.name.length < 2) return ($("shareErr").textContent = "Enter your name.");
+      if (!v.phone && !v.email) return ($("shareErr").textContent = "Add a phone number or an email so they can reach you.");
+      $("shareErr").textContent = "Sending…";
+      const socials = { linkedin: v.linkedin, x: v.x, instagram: v.instagram, facebook: v.facebook };
+      const { error } = await sb.from("shared_contacts").insert({ programme_id: prog.id, checkin_id: mine?.id || null, title: v.title, name: v.name, mda: v.mda, phone: v.phone, email: v.email, socials });
+      if (error) { $("shareErr").textContent = "Couldn't send. Check the connection and try again."; return; }
+      channel?.send({ type: "broadcast", event: "contact", payload: { name: (v.title ? v.title + ". " : "") + v.name, mda: v.mda } });
+      store.set("room_shared_" + code, { at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+      buzz(40); wireShare(t);
+    });
+  }
+
+  // ---------- sound, vibration, screen awake ----------
+  let actx = null, noise = null;
+  function unlockAudio() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      actx = actx || new AC();
+      if (!noise) { noise = actx.createBuffer(1, actx.sampleRate * 0.8, actx.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+      if (actx.state === "suspended") actx.resume();
+    } catch {}
+  }
+  function swoosh() {
+    if (!actx || !noise) return;
+    const t = actx.currentTime, src = actx.createBufferSource(); src.buffer = noise;
+    const bp = actx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.9;
+    const g = actx.createGain();
+    bp.frequency.setValueAtTime(3400, t); bp.frequency.exponentialRampToValueAtTime(400, t + 0.5);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    src.connect(bp).connect(g).connect(actx.destination); src.start(t); src.stop(t + 0.6);
+  }
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
+  let wakeLock = null;
+  async function keepAwake() { try { if (!wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => (wakeLock = null)); } } catch {} }
+
+  boot();
+})();
+</script>
+</body>
+</html>
