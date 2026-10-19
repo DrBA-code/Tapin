@@ -75,6 +75,7 @@
         <p class="muted small" style="margin:0">Participants who checked in already have this page. Others scan this, or open:</p>
         <code id="roomUrl" style="font-family:var(--mono);font-size:13px;word-break:break-all"></code>
         <button class="btn ghost small" id="copyRoom" type="button">Copy room link</button>
+        <a class="btn small" id="present" href="../slides/" target="_blank" rel="noopener">Present slides (throw ready)</a>
         <div><span class="big-n" id="nAll">0</span> <span class="muted">phones connected</span></div>
         <div class="split"><span>Group A: <b id="nA">0</b></span><span>Group B: <b id="nB">0</b></span><span>No group: <b id="nN">0</b></span></div>
       </div>
@@ -206,6 +207,7 @@
     channel.on("broadcast", { event: "throw" }, () => loadThrows());   // a hand throw from Air Swipe Slides
     channel.subscribe(st => { if (st === "SUBSCRIBED") channel.track({ console: true }); });
   }
+  $("present").addEventListener("click", () => { try { localStorage.setItem("airswipe_room", JSON.stringify({ code, pin })); } catch {} });
   $("copyRoom").addEventListener("click", async () => { try { await navigator.clipboard.writeText(ROOM); $("copyRoom").textContent = "Copied"; } catch { $("copyRoom").textContent = ROOM; } setTimeout(() => ($("copyRoom").textContent = "Copy room link"), 2000); });
 
   // ---------- my contact card ----------

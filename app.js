@@ -176,6 +176,7 @@
             <a class="btn small ghost" href="#register/${p.code}">Register</a>
             <a class="btn small ghost" href="#qr/${p.code}" target="_blank" rel="noopener">QR poster</a>
             <a class="btn small ghost" href="throw/#${p.code}" target="_blank" rel="noopener">Throw console</a>
+            <a class="btn small ghost" href="slides/" target="_blank" rel="noopener" data-present="${p.code}">Present slides</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
@@ -194,6 +195,13 @@
     }).join("");
   }
 
+  // "Present slides": open Air Swipe Slides already connected to this programme's room (no codes to type).
+  function presentWith(code, p) { try { localStorage.setItem("airswipe_room", JSON.stringify({ code, pin: p })); } catch {} }
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a[data-present]"); if (!a) return;
+    if (a.dataset.present === "register") { if (rProg) presentWith(rProg.code, rPin); }
+    else presentWith(a.dataset.present, pin());
+  });
   $("progList").addEventListener("click", async e => {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".prog"), id = card.dataset.id, msg = card.querySelector(".err"), act = btn.dataset.act;

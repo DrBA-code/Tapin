@@ -276,7 +276,7 @@ async function connectRoom(code, pin, quiet) {
   const { data: prog } = await sbc.from("programmes").select("id,code,name").eq("code", code).maybeSingle();
   if (!prog) return false;
   throwCfg = { code, pin, prog };
-  try { sessionStorage.setItem("airswipe_room", JSON.stringify({ code, pin })); } catch {}
+  try { localStorage.setItem("airswipe_room", JSON.stringify({ code, pin })); } catch {}
   if (roomChan) sbc.removeChannel(roomChan);
   roomChan = sbc.channel("room-" + code, { config: { broadcast: { self: false } } });
   roomChan.on("broadcast", { event: "armed" }, ({ payload }) => { armedCount = payload?.count || 0; showArmed(); });
@@ -296,9 +296,10 @@ function showArmed() {
   $("armBadge").hidden = !throwCfg; $("armBadge").textContent = armedCount ? `✊ ${armedCount} ticked to throw` : "✊ Grab & throw ready";
 }
 $("tForm").addEventListener("submit", e => { e.preventDefault(); $("tErr").textContent = "Checking…"; connectRoom($("tCode").value, $("tPin").value); });
-$("tOff").addEventListener("click", () => { throwCfg = null; if (roomChan) sbc.removeChannel(roomChan); roomChan = null; try { sessionStorage.removeItem("airswipe_room"); } catch {} $("tForm").hidden = false; $("tConn").hidden = true; showArmed(); });
+$("tOff").addEventListener("click", () => { throwCfg = null; if (roomChan) sbc.removeChannel(roomChan); roomChan = null; try { localStorage.removeItem("airswipe_room"); } catch {} $("tForm").hidden = false; $("tConn").hidden = true; showArmed(); });
 $("tRefresh").addEventListener("click", refreshArmed);
-setTimeout(() => { try { const r = JSON.parse(sessionStorage.getItem("airswipe_room") || "null"); if (r) connectRoom(r.code, r.pin, true); } catch {} }, 600);
+// Opened with "Present slides" from the menu or Throw console: already connected, nothing to type.
+setTimeout(() => { try { const r = JSON.parse(localStorage.getItem("airswipe_room") || "null"); if (r) connectRoom(r.code, r.pin, true); } catch {} }, 600);
 showArmed();
 
 function showGrab(on) {
