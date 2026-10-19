@@ -479,7 +479,12 @@ $("stage").addEventListener("mousemove", () => {
 
 let wakeLock = null;
 async function keepAwake() { try { if (!wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => (wakeLock = null)); } } catch {} }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && running) keepAwake(); });
+document.addEventListener("visibilitychange", () => {
+  // Facilitators switch tabs (wheel, throw console…) mid-session: free the webcam for them, and take it back on return.
+  if (document.hidden) { if (running && stream) { stopCamera(); camPaused = true; } }
+  else { if (running) keepAwake(); if (running && camPaused) { camPaused = false; startTracking(); } }
+});
+let camPaused = false;
 
 // ---------------- hand tracking ----------------
 function camNote(t) { const n = $("camNote"); n.textContent = t; n.hidden = !t; }

@@ -160,6 +160,7 @@ async function open() {
   sb.channel("wheel-" + prog.id).on("postgres_changes", { event: "*", schema: "public", table: "checkins", filter: `programme_id=eq.${prog.id}` }, () => loadPeople()).subscribe();
   setupRemote();
   keepAwake();
+  if (camWanted && !document.hidden) camOn();
   requestAnimationFrame(frame);
 }
 async function loadPeople() {
@@ -312,22 +313,39 @@ document.addEventListener("pointerdown", unlockAudio);
 
 // ---------------- hand control (webcam) ----------------
 let stream = null, recognizer = null, hist = [], cooldown = 0, lastVT = -1;
-$("camBtn").addEventListener("click", async () => {
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; $("cam").hidden = true; $("camBtn").textContent = "Turn on camera"; return; }
+let camWanted = !!ls.get("wheel_cam");
+async function camOn() {
+  if (stream) return;
   unlockAudio();
   try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false }); }
-  catch { $("camBtn").textContent = "Camera blocked"; return; }
+  catch (e) { $("cam").hidden = false; $("camLbl").textContent = e && e.name === "NotReadableError" ? "Camera busy: close other apps using it (e.g. AirSwipe.exe)" : "Camera blocked: allow it in the address bar"; return; }
   $("cam").hidden = false; $("camBtn").textContent = "Turn off camera";
   const v = $("video"); v.srcObject = stream; await v.play().catch(() => {});
   if (!recognizer) {
     $("camLbl").textContent = "Loading hand tracking…";
-    const { FilesetResolver, GestureRecognizer } = await import("../slides/vendor/vision_bundle.mjs");
-    const fs = await FilesetResolver.forVisionTasks(new URL("../slides/vendor/mediapipe-wasm", location.href).href);
-    const opts = d => ({ baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task", delegate: d }, runningMode: "VIDEO", numHands: 1 });
-    try { recognizer = await GestureRecognizer.createFromOptions(fs, opts("GPU")); } catch { recognizer = await GestureRecognizer.createFromOptions(fs, opts("CPU")); }
+    try {
+      const { FilesetResolver, GestureRecognizer } = await import("../slides/vendor/vision_bundle.mjs");
+      const fs = await FilesetResolver.forVisionTasks(new URL("../slides/vendor/mediapipe-wasm", location.href).href);
+      const opts = d => ({ baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task", delegate: d }, runningMode: "VIDEO", numHands: 1 });
+      try { recognizer = await GestureRecognizer.createFromOptions(fs, opts("GPU")); } catch { recognizer = await GestureRecognizer.createFromOptions(fs, opts("CPU")); }
+    } catch (e) { console.error(e); $("camLbl").textContent = "Hand tracking couldn't load: check the internet"; return; }
   }
-  $("camLbl").textContent = "Swipe to spin";
+  $("camLbl").textContent = "Show your hand, then swipe across";
   handLoop();
+}
+function camOff(keepWanted) {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $("camBtn").textContent = "Turn on camera";
+  if (!keepWanted) { $("cam").hidden = true; }
+}
+$("camBtn").addEventListener("click", () => {
+  camWanted = !stream; ls.set("wheel_cam", camWanted);
+  camWanted ? camOn() : camOff(false);
+});
+// Switching browser tabs during the session: hand the webcam back while this tab is hidden, take it again on return.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) camOff(true);
+  else if (camWanted) camOn();
 });
 function handLoop() {
   if (!stream) return;
@@ -338,14 +356,17 @@ function handLoop() {
   let res; try { res = recognizer.recognizeForVideo(v, now); } catch { return; }
   const lm = res.landmarks?.[0];
   $("cam").classList.toggle("hot", !!lm);
-  if (!lm) { hist = []; return; }
+  if (!lm) { hist = []; if (!spinning) $("camLbl").textContent = "Show your hand, then swipe across"; return; }
+  if (!spinning && now > cooldown) $("camLbl").textContent = "Hand seen: swipe across to spin";
   const g = res.gestures?.[0]?.[0];
   if (pendingAgain && g && g.categoryName === "Thumb_Up" && g.score > 0.6 && now > cooldown) { choose(pendingAgain); cooldown = now + 1200; return; }
   const x = (lm[0].x + lm[9].x) / 2;
-  hist.push({ t: now, x }); hist = hist.filter(h => now - h.t < 350);
+  hist.push({ t: now, x }); hist = hist.filter(h => now - h.t < 600);
   if (now < cooldown || hist.length < 3) return;
-  const dx = x - hist[0].x, dt = (now - hist[0].t) / 1000;
-  if (Math.abs(dx) > 0.22) {
+  const xs = hist.map(h => h.x), lo = Math.min(...xs), hi = Math.max(...xs);
+  const dx = (xs.indexOf(hi) > xs.indexOf(lo) ? 1 : -1) * (hi - lo), dt = (now - hist[0].t) / 1000;
+  if (Math.abs(dx) > 0.15) {
+    $("camLbl").textContent = "Spinning!";
     const speed = Math.abs(dx) / Math.max(0.08, dt);         // share of the picture per second
     if (resultShowing) closeResult();
     if (pendingAgain) pendingAgain = null;
