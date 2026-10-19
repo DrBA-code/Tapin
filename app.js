@@ -178,6 +178,7 @@
             <a class="btn small ghost" href="throw/#${p.code}" target="_blank" rel="noopener">Throw console</a>
             <a class="btn small ghost" href="slides/" target="_blank" rel="noopener" data-present="${p.code}">Present slides</a>
             <a class="btn small ghost" href="wheel/#${p.code}" target="_blank" rel="noopener">Spin the wheel</a>
+            <a class="btn small ghost" href="assess/#${p.code}" target="_blank" rel="noopener">Assessments</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
@@ -419,11 +420,30 @@
       $("doneName").textContent = "Ó dàbọ̀, " + fullName(e);
       $("doneMsg").textContent = "Goodbye, and thank you for attending.";
       $("roomLink").href = "room/#" + kProg.code; $("roomLink").hidden = false;
+      fbFor = e.id; fbStars = 0; $("fbText").value = ""; $("fbErr").textContent = ""; paintStars();
+      $("fbForm").hidden = false; $("fbThanks").hidden = true;
     }
-    clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, 20000);
+    clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, kind === "out" ? 60000 : 20000);
   }
+  // Tap-out feedback: stars and an optional comment (saved with leave_feedback, upgrade 6).
+  let fbFor = null, fbStars = 0;
+  const holdDone = () => { clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, 60000); };
+  function paintStars() { document.querySelectorAll("#fbStars button").forEach(b => b.classList.toggle("on", +b.dataset.s <= fbStars)); }
+  $("fbStars").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; fbStars = +b.dataset.s; paintStars(); holdDone(); });
+  $("fbText").addEventListener("input", holdDone);
+  $("fbForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!fbFor) return;
+    if (!fbStars) { $("fbErr").textContent = "Tap the stars to rate the session."; return; }
+    $("fbErr").textContent = "Sending…";
+    const { error } = await sb.rpc("leave_feedback", { p_checkin: fbFor, p_stars: fbStars, p_comment: $("fbText").value.trim() });
+    if (error) { $("fbErr").textContent = /Could not find the function|schema cache/i.test(error.message || "") ? "Feedback isn't switched on yet." : "Couldn't send. Try again."; return; }
+    $("fbForm").hidden = true; $("fbThanks").hidden = false; $("fbThanks").textContent = "Thank you for your feedback " + "★".repeat(fbStars);
+    clearTimeout(doneTimer); doneTimer = setTimeout(resetKiosk, 6000);
+  });
   function resetKiosk() {
     clearTimeout(doneTimer);
+    $("fbForm").hidden = true; $("fbThanks").hidden = true; fbFor = null;
     $("ciForm").reset(); fallbackPhoto = null; $("still").hidden = true; $("ciErr").textContent = "";
     if (!$("kiosk").hidden && !$("kMain").hidden) setTab("in");
   }
@@ -572,6 +592,7 @@
     $("rQr").href = "#qr/" + rProg.code;
     $("rThrow").href = "throw/#" + rProg.code;
     $("rWheel").href = "wheel/#" + rProg.code;
+    $("rAssess").href = "assess/#" + rProg.code;
     $("rBack").textContent = rRole === "organiser" ? "Back to programmes" : "Sign out";
     setStatusBtn();
     await loadRegister();

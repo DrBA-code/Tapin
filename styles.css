@@ -201,3 +201,11 @@ table.reg tr:last-child td{border-bottom:0}
 
 .small{font-size:13px}
 p.small{margin:0}
+
+/* Tap-out feedback */
+.fbform{width:100%;max-width:420px;margin-top:4px;text-align:center;justify-items:center}
+.fbform textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:16px;resize:vertical}
+.stars{display:flex;gap:6px;justify-content:center}
+.stars button{font-size:42px;line-height:1;background:none;border:0;cursor:pointer;color:var(--line);padding:2px}
+.stars button.on{color:var(--gold)}
+.ok{color:var(--accent);font-weight:600}

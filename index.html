@@ -130,6 +130,16 @@
         <p class="muted" id="doneMsg">Look up at the screen.</p>
         <a class="btn big" id="roomLink" hidden style="width:auto">Open my session room</a>
         <span class="muted small" style="max-width:36ch">Slides, case studies and the facilitator's contact will land there.</span>
+        <form id="fbForm" class="panel fbform" hidden novalidate>
+          <b>How was the session?</b>
+          <div class="stars" id="fbStars" role="group" aria-label="Rating">
+            <button type="button" data-s="1" aria-label="1 star">★</button><button type="button" data-s="2" aria-label="2 stars">★</button><button type="button" data-s="3" aria-label="3 stars">★</button><button type="button" data-s="4" aria-label="4 stars">★</button><button type="button" data-s="5" aria-label="5 stars">★</button>
+          </div>
+          <textarea id="fbText" rows="2" maxlength="1000" placeholder="Anything to tell the facilitator? (optional)"></textarea>
+          <button class="btn" type="submit">Send feedback</button>
+          <span class="err" id="fbErr" role="status"></span>
+        </form>
+        <p class="ok" id="fbThanks" hidden></p>
         <button class="btn ghost" id="nextBtn" type="button">Next person</button>
       </div>
     </div>
@@ -191,6 +201,7 @@
         <a class="btn ghost" id="rThrow" target="_blank" rel="noopener">Throw console</a>
         <a class="btn ghost" href="slides/" target="_blank" rel="noopener" data-present="register">Present slides</a>
         <a class="btn ghost" id="rWheel" target="_blank" rel="noopener">Spin the wheel</a>
+        <a class="btn ghost" id="rAssess" target="_blank" rel="noopener">Assessments</a>
         <button class="btn ghost" id="rStatus" type="button"></button>
         <a class="btn ghost" id="rBack" href="#">Menu</a>
       </div>

@@ -75,6 +75,55 @@
   .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-width:420px){.two{grid-template-columns:1fr}}
   .ok{color:var(--accent);font-weight:600}
+
+  /* live activity (poll / quiz / …) */
+  #act{position:fixed;inset:0;z-index:9;background:var(--bg);overflow-y:auto;display:flex;flex-direction:column}
+  #act .ahead{position:sticky;top:0;z-index:1;background:var(--bg);padding-block:calc(12px + env(safe-area-inset-top,0px)) 10px;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+  #act .akind{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+  #act .atimer{position:absolute;left:0;right:0;bottom:-1px;height:4px;background:var(--line)}
+  #act .atimer i{display:block;height:100%;background:var(--gold);transform-origin:left;transition:transform .25s linear}
+  #act .abody{padding:18px max(16px,env(safe-area-inset-left,0px)) calc(40px + env(safe-area-inset-bottom,0px));max-width:640px;width:100%;margin:0 auto;display:grid;gap:14px;align-content:start}
+  #act .aq{font-family:var(--display);font-weight:800;font-size:clamp(22px,6vw,30px);line-height:1.15}
+  #act .abody.fly{animation:fromT .7s cubic-bezier(.2,.9,.25,1.15) both}
+  .choices{display:grid;gap:10px}
+  .choice{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center;border:0;border-radius:16px;padding:12px;min-height:68px;font-size:18px;font-weight:600;text-align:left;cursor:pointer;color:#14211c}
+  .choice .l{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.55);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:22px}
+  .choice:active{transform:scale(.98)}
+  .choice[disabled]{cursor:default}
+  .sentbox{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:22px;text-align:center;display:grid;gap:8px;justify-items:center}
+  .sentbox .big{font-size:52px;line-height:1}
+  .sentbox b{font-family:var(--display);font-size:22px}
+  .sentbox.good{border-color:#3fb98a;background:color-mix(in srgb,#3fb98a 14%,var(--surface))}
+  .sentbox.bad{border-color:var(--danger)}
+  .sentbox.win{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 18%,var(--surface))}
+  .pts{font-family:var(--mono);color:var(--gold);font-size:18px}
+  .ordl{display:grid;gap:8px}
+  .ordl div{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:600}
+  .ordl b{font-family:var(--display);color:var(--accent);text-align:center}
+  .ordl .mv{display:flex;gap:4px}
+  .ordl .mv button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:18px;cursor:pointer}
+  .ordl .mv button:disabled{opacity:.25}
+  .matchl{display:grid;gap:10px}
+  .matchl label{display:grid;gap:6px;font-weight:600}
+  .matchl select,.abody textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-size:16px}
+  .scaleval{font-family:var(--display);font-weight:800;font-size:72px;text-align:center;line-height:1;color:var(--accent)}
+  .abody input[type=range]{width:100%;accent-color:var(--accent);height:36px}
+  .scalelab{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px}
+  .stars{display:flex;gap:6px;justify-content:center}
+  .stars button{font-size:44px;background:none;border:0;cursor:pointer;color:var(--line);line-height:1;padding:2px}
+  .stars button.on{color:var(--gold)}
+  .spotimg{position:relative;border-radius:12px;overflow:hidden;background:#fff;touch-action:manipulation}
+  .spotimg img{width:100%;display:block}
+  .spotimg .mk{position:absolute;width:34px;height:34px;border:4px solid #f2786f;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(0,0,0,.35);pointer-events:none}
+  .spotimg .ok{position:absolute;border:4px solid #3fb98a;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
+  .casetext{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:15px;white-space:pre-wrap}
+  .teampick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .teampick button{padding:26px 10px;border-radius:16px;border:0;font-family:var(--display);font-weight:800;font-size:22px;cursor:pointer;color:#06140e}
+  .livepill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:6;background:var(--gold);color:#1b1205;border:0;border-radius:999px;padding:12px 20px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:bump 1.2s infinite;white-space:nowrap}
+  .fbitem{background:color-mix(in srgb,var(--gold) 12%,var(--surface));border:1px solid var(--gold);border-radius:14px;padding:12px 14px;display:grid;gap:4px}
+  .fbitem small{color:var(--muted)}
+  .fbitem.new{animation:land .7s ease-out}
+  @media (prefers-reduced-motion:reduce){#act .abody.fly,.livepill{animation:none}}
 </style>
 </head>
 <body>
@@ -91,6 +140,7 @@
       <button type="button" data-g="B">Group B</button>
     </div>
     <span class="muted small">Your group, if the facilitator gave you one. You can change it later.</span>
+    <label class="f" id="gNameBox" hidden style="text-align:left">Your name <span class="muted small" style="font-weight:400">(for quizzes and the leaderboard)</span><input type="text" id="gName" autocomplete="name" placeholder="e.g. Ada Obi"></label>
     <button class="btn big" id="joinBtn" type="button">Join the session</button>
     <div class="err" id="gErr" role="alert"></div>
   </div>
@@ -108,9 +158,16 @@
     <button type="button" data-g="all">Everyone</button>
     <button type="button" data-g="B">Group B</button>
   </div>
+  <div id="fbBox" hidden><h2 style="font-size:20px;margin-top:22px">Feedback for you</h2><div class="items" id="fbList"></div></div>
   <h2 style="font-size:20px;margin-top:22px">My items</h2>
   <div class="items" id="items"></div>
 </section>
+
+<div id="act" hidden>
+  <div class="ahead"><span class="akind" id="aKind"></span><span class="row" style="gap:8px"><span class="muted small" id="aStep"></span><button class="btn ghost small" id="aMin" type="button">My items</button></span><div class="atimer" id="aTimer" hidden><i></i></div></div>
+  <div class="abody" id="aBody"></div>
+</div>
+<button class="livepill" id="livePill" type="button" hidden>❓ Question live · tap to answer</button>
 
 <button class="pocket" id="pocket" type="button" hidden>👜 My items <span class="n" id="pocketN">0</span></button>
 
@@ -140,6 +197,7 @@
 <script src="../config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
 <script src="../vcard.js"></script>
+<script src="../assess/kinds.js"></script>
 <script>
 (() => {
   "use strict";
@@ -157,6 +215,8 @@
   const caught = new Set(store.get("room_caught_" + code) || []);
   const mine = store.get("tapin_mine_" + code);    // set by Tap-In check-in on this phone
   const fullName = e => (e.title === "Miss" ? "Miss " : e.title ? e.title + ". " : "") + e.name;
+  let myName = mine ? fullName(mine) : (store.get("room_name_" + code) || "");
+  const device = (() => { let d = store.get("room_device"); if (!d) { d = crypto.randomUUID(); store.set("room_device", d); } return d; })();
   const KIND = { image: ["🖼️", "Slide"], file: ["📄", "Document"], contact: ["👤", "Contact card"], link: ["🔗", "Link"] };
 
   // ---------- gate: one tap to join also unlocks sound and vibration ----------
@@ -168,7 +228,7 @@
   $("groups").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     group = b.dataset.g; pickGroup($("groups"), group); store.set("room_group_" + code, group);
-    channel?.track({ group }); render();
+    channel?.track({ group, name: myName }); render();
   });
 
   async function boot() {
@@ -179,9 +239,13 @@
     if (!prog) { $("gMsg").textContent = "This room link isn't valid. Check the code with your facilitator."; $("joinBtn").hidden = true; $("gGroups").hidden = true; return; }
     $("gProg").textContent = prog.name; $("prog").textContent = prog.name;
     if (mine) $("hello").innerHTML = `<span class="yo">Ẹ káàbọ̀</span>, ${esc(fullName(mine))}`;
+    else { $("gNameBox").hidden = false; $("gName").value = myName; }
     if (store.get("room_joined_" + code)) join();
   }
-  $("joinBtn").addEventListener("click", () => { unlockAudio(); join(); });
+  $("joinBtn").addEventListener("click", () => {
+    if (!mine) { myName = $("gName").value.trim(); store.set("room_name_" + code, myName); }
+    unlockAudio(); join();
+  });
 
   async function join() {
     store.set("room_joined_" + code, true); store.set("room_group_" + code, group);
@@ -190,14 +254,19 @@
     await loadItems(); render();
     channel = sb.channel("room-" + code, { config: { broadcast: { self: false }, presence: { key: crypto.randomUUID() } } });
     channel.on("broadcast", { event: "throw" }, ({ payload }) => incoming(payload));
+    channel.on("broadcast", { event: "live" }, () => refreshLive());
+    channel.on("broadcast", { event: "winner" }, ({ payload }) => { if (cur && payload && payload.step === cur.step) { winner = payload.name || ""; drawAct(); } });
+    channel.on("broadcast", { event: "feedback" }, () => loadFeedback(true));
+    channel.on("postgres_changes", { event: "*", schema: "public", table: "live_state", filter: `programme_id=eq.${prog.id}` }, () => refreshLive());
     channel.subscribe(async st => {
       const live = $("live");
-      if (st === "SUBSCRIBED") { live.classList.add("on"); live.lastChild.textContent = "Connected · ready to catch"; channel.track({ group, name: mine ? fullName(mine) : "" }); }
+      if (st === "SUBSCRIBED") { refreshLive(); live.classList.add("on"); live.lastChild.textContent = "Connected · ready to catch"; channel.track({ group, name: myName }); }
       else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") { live.classList.remove("on"); live.lastChild.textContent = "Reconnecting…"; }
     });
     keepAwake();
     // Catch up on anything missed while the page was closed or the phone slept.
-    document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible") { keepAwake(); const before = items.length; await loadItems(); if (items.length > before) render(); } });
+    refreshLive(); loadFeedback(false);
+    document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible") { keepAwake(); refreshLive(); loadFeedback(false); const before = items.length; await loadItems(); if (items.length > before) render(); } });
   }
 
   async function loadItems() {
@@ -372,6 +441,192 @@
   const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
   let wakeLock = null;
   async function keepAwake() { try { if (!wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => (wakeLock = null)); } } catch {} }
+
+
+  // ---------- live activities: polls, quizzes, first to catch, word clouds… ----------
+  const AK = (window.ASSESS && window.ASSESS.KINDS) || {};
+  const LET = "ABCDEF", COL = (window.ASSESS && window.ASSESS.COLORS) || ["#e8b44a", "#3fb98a", "#5aa9e6", "#f2786f", "#b48ef0", "#f0a35e"];
+  let cur = null, curKey = "", draft = null, sent = null, winner = "", leftAt = 0, minimised = false, actErr = "", busy = false;
+
+  async function refreshLive() {
+    if (!sb || !prog) return;
+    const { data, error } = await sb.rpc("room_current", { p_code: code, p_device: device });
+    if (error) return;   // database not upgraded yet: nothing to show
+    showLive(data);
+  }
+  function showLive(d) {
+    if (!d || d.phase === "idle" || !d.q) { cur = null; curKey = ""; $("act").hidden = true; $("livePill").hidden = true; return; }
+    const key = `${d.activity}|${d.run}|${d.step}`, fresh = key !== curKey;
+    const reopened = !fresh && cur && cur.phase !== "open" && d.phase === "open";
+    cur = d; curKey = key;
+    if (fresh || reopened) { draft = initDraft(d); sent = d.mine || null; winner = ""; actErr = ""; minimised = false; }
+    else if (d.mine) sent = { ...sent, ...d.mine };
+    leftAt = d.left != null ? Date.now() + d.left * 1000 : 0;
+    $("act").hidden = minimised; $("livePill").hidden = !minimised;
+    drawAct(fresh);
+    if (fresh && d.phase === "open") { swoosh(); buzz([30, 40, 60]); }
+    if (!fresh && d.phase === "reveal") buzz(sent && +sent.score === 1 ? [40, 60, 40, 60, 120] : 40);
+  }
+  function initDraft(d) {
+    const q = d.q || {};
+    if (d.kind === "order") return { items: (q.items || []).slice() };
+    if (d.kind === "match") return { rights: (q.lefts || []).map(() => "") };
+    if (d.kind === "words") return { words: Array(q.max || 1).fill("") };
+    if (d.kind === "scale") return { v: 5, moved: false };
+    if (d.kind === "feedback") return { stars: 0, text: "" };
+    return {};
+  }
+  $("aMin").addEventListener("click", () => { minimised = true; $("act").hidden = true; $("livePill").hidden = false; });
+  $("livePill").addEventListener("click", () => { minimised = false; $("act").hidden = false; $("livePill").hidden = true; drawAct(); });
+
+  const needTeam = () => cur && cur.teams && group === "all";
+  const needName = () => !myName && cur && cur.kind !== "finger";
+
+  function drawAct(fly) {
+    if (!cur) return;
+    const k = AK[cur.kind] || { ic: "❓", name: "Question" }, q = cur.q || {};
+    $("aKind").textContent = `${k.ic} ${k.name}`;
+    $("aStep").textContent = cur.steps > 1 ? `${cur.step + 1} of ${cur.steps}` : "";
+    const b = $("aBody");
+    let h = `<div class="aq">${esc(q.q)}</div>`;
+    if (needName()) h += nameForm();
+    else if (needTeam()) h += `<p class="muted" style="margin:0">This is a team round. Which group are you in?</p><div class="teampick"><button type="button" data-team="A" style="background:#3fb98a">Group A</button><button type="button" data-team="B" style="background:#5aa9e6">Group B</button></div>`;
+    else if (cur.phase === "reveal") h += revealView();
+    else if (sent) h += sentView();
+    else if (cur.phase !== "open") h += `<div class="sentbox"><span class="big">⏱️</span><b>Time's up</b><span class="muted">Look at the screen.</span></div>`;
+    else h += answerView();
+    if (actErr) h += `<div class="err" role="alert">${esc(actErr)}</div>`;
+    b.innerHTML = h;
+    if (fly && !reduced) { b.classList.remove("fly"); void b.offsetWidth; b.classList.add("fly"); }
+    wireAct();
+  }
+
+  function nameForm() {
+    return `<form id="nameForm" class="card" novalidate><label class="f">Your name, so the facilitator can see your answers<input type="text" id="aName" autocomplete="name" placeholder="e.g. Ada Obi"></label><button class="btn big" type="submit">Continue</button></form>`;
+  }
+
+  function choicesHtml(opts, { mineI = null, correct = null, disabled = false, numbers = false } = {}) {
+    return `<div class="choices">${opts.map((o, j) => `<button class="choice${mineI === j ? " mine" : ""}${correct != null && j !== correct ? " dim" : ""}" type="button" data-i="${j}" style="background:${COL[j]}" ${disabled ? "disabled" : ""}><span class="l">${numbers ? j + 1 : LET[j]}</span><span>${esc(o)}</span></button>`).join("")}</div>`;
+  }
+
+  function answerView() {
+    const q = cur.q || {}, kind = cur.kind;
+    if (kind === "finger") return `<div class="sentbox"><span class="big">✋</span><b>Raise your hand</b><span class="muted">Hold it up high so the camera can count it.</span></div>` + choicesHtml(q.options || [], { disabled: true, numbers: true }) + `<p class="muted small" style="margin:0;text-align:center">1 finger for option 1, 2 fingers for option 2, and so on.</p>`;
+    if (q.options) return choicesHtml(q.options) + (kind === "buzz" ? `<p class="muted small" style="margin:0;text-align:center">⚡ First correct answer wins. Be quick!</p>` : "");
+    if (kind === "words") return `<form id="aForm" class="card" novalidate>${draft.words.map((w, i) => `<input type="text" data-w="${i}" maxlength="40" value="${esc(w)}" placeholder="${draft.words.length > 1 ? "Word " + (i + 1) : "One or two words"}" autocomplete="off">`).join("")}<button class="btn big" type="submit">Send</button></form>`;
+    if (kind === "scale") return `<form id="aForm" class="card" novalidate><div class="scaleval" id="sv">${draft.v}</div><input type="range" min="0" max="10" step="1" value="${draft.v}" id="sr" aria-label="Your rating from 0 to 10"><div class="scalelab"><span>0 · ${esc(q.lo || "")}</span><span>${esc(q.hi || "")} · 10</span></div><button class="btn big" type="submit">Send</button></form>`;
+    if (kind === "order") return `<p class="muted" style="margin:0">Use the arrows to put them in order, first at the top.</p><div class="ordl">${draft.items.map((it, i) => `<div><b>${i + 1}</b><span>${esc(it)}</span><span class="mv"><button type="button" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button><button type="button" data-dn="${i}" ${i === draft.items.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button></span></div>`).join("")}</div><button class="btn big" id="aSend" type="button">Send my order</button>`;
+    if (kind === "match") return `<div class="matchl">${(q.lefts || []).map((l, i) => `<label>${esc(l)}<select data-m="${i}"><option value="">Choose…</option>${(q.rights || []).map(r => `<option ${draft.rights[i] === r ? "selected" : ""}>${esc(r)}</option>`).join("")}</select></label>`).join("")}</div><button class="btn big" id="aSend" type="button">Send my matches</button>`;
+    if (kind === "spot") return `<p class="muted" style="margin:0">Tap where the error is. Zoom in if you need to.</p><div class="spotimg" id="spotImg"><img src="${esc(q.image)}" alt="Find the error">${draft.x != null ? `<span class="mk" style="left:${draft.x * 100}%;top:${draft.y * 100}%"></span>` : ""}</div><button class="btn big" id="aSend" type="button" ${draft.x == null ? "disabled" : ""}>Send</button>`;
+    if (kind === "feedback") return `<form id="aForm" class="card" novalidate><div class="stars" role="group" aria-label="Rating">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${draft.stars >= n ? "on" : ""}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}</div><textarea id="aText" rows="3" maxlength="1000" placeholder="Anything to add? (optional)">${esc(draft.text || "")}</textarea><button class="btn big" type="submit">Send</button></form>`;
+    // case, exit and anything else: written answer
+    return `${q.text ? `<div class="casetext">${esc(q.text)}</div>` : ""}<form id="aForm" class="card" novalidate><textarea id="aText" rows="${cur.kind === "case" ? 7 : 4}" maxlength="2000" placeholder="Type your answer…">${esc(draft.text || "")}</textarea><button class="btn big" type="submit">Send</button></form>`;
+  }
+
+  function mineSummary() {
+    const a = sent?.answer || {}, q = cur.q || {};
+    if (a.i != null && q.options) return `You chose <b>${LET[a.i]}. ${esc(q.options[a.i])}</b>`;
+    if (a.words) return `You said <b>${esc(a.words.filter(Boolean).join(", "))}</b>`;
+    if (a.v != null) return `You said <b>${esc(a.v)}</b> / 10`;
+    if (a.stars) return `<b>${"★".repeat(a.stars)}</b>`;
+    return "";
+  }
+  function sentView() {
+    return `<div class="sentbox"><span class="big">✓</span><b>Answer sent</b><span class="muted">${mineSummary() || "Look at the screen."}</span>${mineSummary() ? `<span class="muted small">Look at the screen.</span>` : ""}</div>`;
+  }
+
+  function revealView() {
+    const q = cur.q || {}, kind = cur.kind, scored = AK[kind] && AK[kind].scored;
+    if (!scored) return sent ? `<div class="sentbox"><span class="big">📊</span><b>Results are on the screen</b><span class="muted">${mineSummary()}</span></div>` : `<div class="sentbox"><span class="big">📊</span><b>Results are on the screen</b></div>`;
+    const sc = sent ? +sent.score : null, pts = sent?.points || 0;
+    let right = "";
+    if (q.options && q.correct != null) right = `${LET[q.correct]}. ${esc(q.options[q.correct])}`;
+    let box;
+    if (kind === "buzz" && sent && sc === 1 && sent.rank === 1) box = `<div class="sentbox win"><span class="big">⚡</span><b>You caught it first!</b><span class="pts">+${pts}</span></div>`;
+    else if (kind === "buzz" && winner && !(sent && sent.rank === 1)) box = `<div class="sentbox${sc === 1 ? " good" : ""}"><span class="big">${sc === 1 ? "✓" : "⚡"}</span><b>${esc(winner)} caught it first</b>${sc === 1 ? `<span class="muted">You were right too · <span class="pts">+${pts}</span></span>` : right ? `<span class="muted">The answer: <b>${right}</b></span>` : ""}</div>`;
+    else if (!sent) box = `<div class="sentbox"><span class="big">⏱️</span><b>You didn't answer</b>${right ? `<span class="muted">The answer: <b>${right}</b></span>` : ""}</div>`;
+    else if (sc === 1) box = `<div class="sentbox good"><span class="big">🎉</span><b>Correct!</b><span class="pts">+${pts}</span></div>`;
+    else if (sc > 0) box = `<div class="sentbox"><span class="big">👍</span><b>${Math.round(sc * 100)}% right</b><span class="pts">+${pts}</span></div>`;
+    else box = `<div class="sentbox bad"><span class="big">✗</span><b>Not this time</b>${right ? `<span class="muted">The answer: <b>${right}</b></span>` : ""}</div>`;
+    if (q.answer_items) box += `<div class="ordl">${q.answer_items.map((it, i) => `<div><b>${i + 1}</b><span>${esc(it)}</span><span>${sent?.answer?.items?.[i] === it ? "✓" : ""}</span></div>`).join("")}</div>`;
+    if (q.answer_pairs) box += `<div class="ordl">${q.answer_pairs.map((p, i) => `<div><b>${LET[i] || i + 1}</b><span>${esc(p.l)} → ${esc(p.r)}</span><span>${sent?.answer?.rights?.[i] === p.r ? "✓" : ""}</span></div>`).join("")}</div>`;
+    if (kind === "spot" && q.region) box += `<div class="spotimg"><img src="${esc(q.image)}" alt="">${sent?.answer?.x != null ? `<span class="mk" style="left:${sent.answer.x * 100}%;top:${sent.answer.y * 100}%"></span>` : ""}<span class="ok" style="left:${q.region.x * 100}%;top:${q.region.y * 100}%;width:${q.region.r * 2 / (q.aspect || 1.5) * 100}%;aspect-ratio:1"></span></div>`;
+    return box;
+  }
+
+  function wireAct() {
+    const b = $("aBody");
+    const nf = $("nameForm");
+    if (nf) nf.addEventListener("submit", e => { e.preventDefault(); const v = $("aName").value.trim(); if (v.length < 2) return; myName = v; store.set("room_name_" + code, v); channel?.track({ group, name: myName }); drawAct(); });
+    b.querySelectorAll("[data-team]").forEach(x => x.addEventListener("click", () => { group = x.dataset.team; store.set("room_group_" + code, group); pickGroup($("groups"), group); channel?.track({ group, name: myName }); render(); drawAct(); }));
+    if (cur.phase !== "open" || sent || needName() || needTeam()) return;
+    b.querySelectorAll(".choice:not([disabled])").forEach(x => x.addEventListener("click", () => submit({ i: +x.dataset.i })));
+    const f = $("aForm");
+    if (f) f.addEventListener("submit", e => {
+      e.preventDefault();
+      if (cur.kind === "words") { const words = [...f.querySelectorAll("[data-w]")].map(i => i.value.trim()).filter(Boolean); if (!words.length) return showErr("Type a word first."); submit({ words }); }
+      else if (cur.kind === "scale") submit({ v: draft.v });
+      else if (cur.kind === "feedback") { if (!draft.stars) return showErr("Tap the stars to rate."); submit({ stars: draft.stars, text: $("aText").value.trim() }); }
+      else { const t = $("aText").value.trim(); if (t.length < 2) return showErr("Type your answer first."); submit({ text: t }); }
+    });
+    b.querySelectorAll("[data-w]").forEach(i => i.addEventListener("input", () => (draft.words[+i.dataset.w] = i.value)));
+    const sr = $("sr"); if (sr) sr.addEventListener("input", () => { draft.v = +sr.value; $("sv").textContent = sr.value; });
+    const at = $("aText"); if (at) at.addEventListener("input", () => (draft.text = at.value));
+    b.querySelectorAll("[data-star]").forEach(x => x.addEventListener("click", () => { draft.stars = +x.dataset.star; b.querySelectorAll("[data-star]").forEach(y => y.classList.toggle("on", +y.dataset.star <= draft.stars)); buzz(10); }));
+    b.querySelectorAll("[data-up],[data-dn]").forEach(x => x.addEventListener("click", () => {
+      const i = +(x.dataset.up ?? x.dataset.dn), j = x.dataset.up != null ? i - 1 : i + 1;
+      [draft.items[i], draft.items[j]] = [draft.items[j], draft.items[i]]; buzz(8); drawAct();
+    }));
+    b.querySelectorAll("[data-m]").forEach(s => s.addEventListener("change", () => (draft.rights[+s.dataset.m] = s.value)));
+    const sp = $("spotImg");
+    if (sp) sp.addEventListener("click", e => { const r = sp.getBoundingClientRect(); draft.x = +((e.clientX - r.left) / r.width).toFixed(4); draft.y = +((e.clientY - r.top) / r.height).toFixed(4); buzz(10); drawAct(); });
+    const send = $("aSend");
+    if (send) send.addEventListener("click", () => {
+      if (cur.kind === "order") submit({ items: draft.items });
+      else if (cur.kind === "match") { if (draft.rights.some(r => !r)) return showErr("Choose a match for every line."); submit({ rights: draft.rights }); }
+      else if (cur.kind === "spot") { if (draft.x == null) return; submit({ x: draft.x, y: draft.y }); }
+    });
+  }
+  function showErr(t) { actErr = t; drawAct(); actErr = ""; }
+
+  async function submit(answer) {
+    if (busy || !cur) return; busy = true;
+    const at = cur;
+    const { data, error } = await sb.rpc("submit_answer", { p_code: code, p_device: device, p_checkin: mine?.id || null, p_name: myName, p_grp: group, p_answer: answer });
+    busy = false;
+    if (cur !== at) return;
+    if (error) {
+      const m = error.message || "";
+      if (/already answered/i.test(m)) { sent = sent || { answer }; actErr = ""; }
+      else if (/Time is up|closed/i.test(m)) { actErr = "Answers have closed for this one."; refreshLive(); }
+      else actErr = "Couldn't send. Check the connection and try again.";
+      drawAct(); return;
+    }
+    sent = { answer, ...data }; actErr = "";
+    channel?.send({ type: "broadcast", event: "answered", payload: { step: cur.step } });
+    buzz(cur.kind === "buzz" ? [20, 30, 20] : 25);
+    drawAct();
+  }
+  setInterval(() => {
+    const t = $("aTimer");
+    if (!cur || cur.phase !== "open" || !leftAt || !cur.seconds) { t.hidden = true; return; }
+    const left = Math.max(0, leftAt - Date.now());
+    t.hidden = false; t.firstElementChild.style.transform = `scaleX(${left / (cur.seconds * 1000)})`;
+    $("aStep").textContent = (cur.steps > 1 ? `${cur.step + 1} of ${cur.steps} · ` : "") + Math.ceil(left / 1000) + "s";
+  }, 250);
+
+  // ---------- feedback from the facilitator ----------
+  let fbSeen = store.get("room_fbseen_" + code) || [];
+  async function loadFeedback(alert) {
+    if (!sb || !prog) return;
+    const { data, error } = await sb.rpc("my_feedback", { p_code: code, p_device: device });
+    if (error || !Array.isArray(data)) return;
+    $("fbBox").hidden = !data.length;
+    const fresh = data.filter(f => !fbSeen.includes(f.id));
+    $("fbList").innerHTML = data.map(f => `<div class="fbitem${fresh.includes(f) ? " new" : ""}"><small>✨ On: ${esc(f.q || f.title)}</small><span>${esc(f.feedback)}</span></div>`).join("");
+    if (fresh.length && alert) { buzz([30, 40, 30]); if (minimised || $("act").hidden) scrollTo({ top: $("fbBox").offsetTop - 60, behavior: reduced ? "auto" : "smooth" }); }
+    fbSeen = data.map(f => f.id); store.set("room_fbseen_" + code, fbSeen.slice(0, 200));
+  }
 
   boot();
 })();

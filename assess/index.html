@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Assessments</title>
+<meta name="description" content="Polls, quizzes, first to catch, word clouds, tests and feedback for PSSDC programmes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="assess.css">
+</head>
+<body>
+
+<!-- CONSOLE -->
+<section class="wrap wide" id="app">
+  <div class="top">
+    <div>
+      <div class="brand" data-logos></div>
+      <div class="eyebrow">Assessments</div>
+      <h1 class="pagetitle" id="title">Assessments</h1>
+    </div>
+    <button class="roomchip" id="roomChip" type="button" hidden title="Room QR code for participants">
+      <span class="qr" id="chipQr"></span>
+      <span><b id="nIn">0</b> phones in the room<small>Show room QR</small></span>
+    </button>
+  </div>
+  <p class="notice bad" id="note" hidden></p>
+  <div class="notice row" id="stuck" hidden style="margin-top:16px;justify-content:space-between"><span id="stuckTxt"></span><span class="row"><button class="btn small" id="stuckResume" type="button">Resume on the projector</button><button class="btn small ghost" id="stuckEnd" type="button">End it</button></span></div>
+
+  <div class="panel lock" id="lock" hidden>
+    <h2>Sign in</h2>
+    <p class="muted">Enter the organiser PIN or this programme's coordinator PIN.</p>
+    <form id="pinForm" class="row" novalidate><input type="password" id="pin" placeholder="PIN" aria-label="PIN"><button class="btn" type="submit">Open</button></form>
+    <div class="err" id="pinErr" role="alert"></div>
+  </div>
+
+  <!-- tiles -->
+  <div id="home" class="view" hidden></div>
+
+  <!-- one kind: saved list + new -->
+  <div id="kindView" class="view" hidden>
+    <button class="back" data-back type="button">← All activities</button>
+    <div class="khead"><span class="kic" id="kIc"></span><div><h2 id="kName"></h2><p class="muted" id="kLine"></p></div></div>
+    <div class="row"><button class="btn" id="kNew" type="button">+ New</button><button class="btn ghost" id="kAI" type="button">✨ Draft with AI</button></div>
+    <div class="list" id="kList"></div>
+  </div>
+
+  <!-- builder -->
+  <div id="builder" class="view" hidden>
+    <button class="back" id="bBack" type="button">← Back</button>
+    <div class="khead"><span class="kic" id="bIc"></span><div><h2 id="bKind"></h2><p class="muted" id="bLine"></p></div></div>
+    <label class="f">Title<input type="text" id="bTitle" placeholder="e.g. Module 2 check"></label>
+    <div id="bSteps" class="steps"></div>
+    <div class="row"><button class="btn ghost" id="bAdd" type="button">+ Add question</button></div>
+    <div class="settings">
+      <label class="f inline" for="bSec">Time per question
+        <select id="bSec"><option value="0">No timer</option><option>10</option><option>15</option><option>20</option><option>30</option><option>45</option><option>60</option><option>90</option><option>120</option><option>180</option><option>300</option><option>600</option></select>
+      </label>
+    </div>
+    <div class="row sticky">
+      <button class="btn" id="bLive" type="button">▶ Save and go live</button>
+      <button class="btn ghost" id="bSave" type="button">Save</button>
+      <button class="btn ghost" id="bAI" type="button">✨ Draft with AI</button>
+      <button class="btn ghost danger-t" id="bDel" type="button" hidden>Delete</button>
+      <span class="err" id="bErr" role="status"></span>
+    </div>
+  </div>
+
+  <!-- all saved -->
+  <div id="mine" class="view" hidden>
+    <button class="back" data-back type="button">← All activities</button>
+    <h2>My activities</h2>
+    <div class="list" id="mList"></div>
+  </div>
+
+  <!-- question bank -->
+  <div id="bank" class="view" hidden>
+    <button class="back" data-back type="button">← All activities</button>
+    <h2>Question bank</h2>
+    <p class="muted">Activities from every programme you manage. Copy one into this programme to reuse it with a new batch.</p>
+    <input type="text" id="bankQ" placeholder="Search" aria-label="Search the question bank">
+    <div class="list" id="bankList"></div>
+  </div>
+
+  <!-- AI writer -->
+  <div id="ai" class="view" hidden>
+    <button class="back" data-back type="button">← All activities</button>
+    <h2>✨ AI question writer</h2>
+    <p class="muted">Paste your slide text, notes or a policy extract. AI drafts the questions; you check and edit them before anything goes live.</p>
+    <details class="keybox" id="keyBox">
+      <summary id="keySum">Connect AI (one time on this laptop)</summary>
+      <p class="muted small">Uses your own Claude API key from console.anthropic.com. It is kept only in this browser on this laptop and sent only to Anthropic.</p>
+      <div class="row"><input type="password" id="aiKey" placeholder="sk-ant-…" aria-label="Claude API key" autocomplete="off"><input type="text" id="aiModel" placeholder="Model" aria-label="Model" style="max-width:220px"><button class="btn small" id="aiKeySave" type="button">Save</button><button class="btn small ghost" id="aiKeyClear" type="button">Remove</button></div>
+    </details>
+    <label class="f">Material<textarea id="aiText" rows="9" placeholder="Paste text here…"></textarea></label>
+    <div class="row">
+      <label class="f inline">Make a<select id="aiKind"></select></label>
+      <label class="f inline">Questions<select id="aiN"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option></select></label>
+      <label class="f inline">Level<select id="aiLevel"><option>Mixed</option><option>Easy</option><option>Moderate</option><option>Hard</option></select></label>
+      <button class="btn" id="aiGo" type="button">Draft questions</button>
+    </div>
+    <div class="err" id="aiErr" role="status"></div>
+  </div>
+
+  <!-- results -->
+  <div id="results" class="view" hidden>
+    <button class="back" data-back type="button">← All activities</button>
+    <div class="row" style="justify-content:space-between"><h2>Results</h2><div class="row"><button class="btn small" id="rCsv" type="button">Download (Excel/CSV)</button><button class="btn small ghost" id="rRefresh" type="button">Refresh</button></div></div>
+    <div class="stats" id="rStats"></div>
+    <div class="tablewrap"><table class="reg" id="rTable"></table></div>
+    <div id="rMore" class="list"></div>
+  </div>
+</section>
+
+<!-- launch choice for pre/post tests -->
+<dialog id="runDlg">
+  <form method="dialog" class="dlg">
+    <h3>Run this test as…</h3>
+    <p class="muted">Run it once at the start and once at the end. Results shows each person's gain.</p>
+    <div class="row"><button class="btn" value="pre">Pre-test (start)</button><button class="btn" value="post">Post-test (end)</button><button class="btn ghost" value="">Cancel</button></div>
+  </form>
+</dialog>
+
+<!-- room QR -->
+<dialog id="qrDlg">
+  <form method="dialog" class="dlg center">
+    <h3>Join the session room</h3>
+    <div class="bigqr" id="dlgQr"></div>
+    <code id="dlgUrl"></code>
+    <button class="btn ghost">Close</button>
+  </form>
+</dialog>
+
+<!-- STAGE (projector) -->
+<section id="stage" hidden>
+  <div class="sbar">
+    <div class="sleft"><span class="skind" id="sKind"></span><span class="sstep" id="sStep"></span></div>
+    <div class="sright">
+      <div class="answered"><b id="sCount">0</b><small id="sCountLbl">answered</small></div>
+      <div class="sjoin"><span class="qr" id="sQr"></span><span>Answer on your phone</span></div>
+    </div>
+  </div>
+  <div class="timer" id="sTimer"><i></i></div>
+  <div class="tug" id="sTug" hidden><div class="ta"><b>Group A</b><span id="tugA">0</span></div><div class="track"><i id="tugBar"></i><span class="mid"></span></div><div class="tb"><span id="tugB">0</span><b>Group B</b></div></div>
+  <div class="sbody">
+    <h1 class="sq" id="sQ"></h1>
+    <div class="ssub" id="sSub"></div>
+    <div class="viz" id="sViz"></div>
+  </div>
+  <div class="faces" id="sFaces" aria-hidden="true"></div>
+
+  <div class="overlay" id="sOver" hidden></div>
+
+  <div class="dock" id="dock">
+    <button id="dPrev" type="button" title="Previous question (←)">◀</button>
+    <button id="dMain" class="main" type="button">Reveal</button>
+    <button id="dNext" type="button" title="Next question (→)">▶</button>
+    <span class="sep"></span>
+    <button id="dBoard" type="button" title="Leaderboard (L)">🏆 Leaderboard</button>
+    <button id="dLock" type="button" hidden>🔒 Lock count</button>
+    <button id="dAI" type="button" hidden>✨ AI review</button>
+    <button id="dFs" type="button" title="Full screen (F)">⛶</button>
+    <button id="dEnd" type="button" title="End (Esc)">✕ End</button>
+    <span class="keys">Space: next step · ← →: questions · L: leaderboard · F: full screen · Esc: end</span>
+  </div>
+</section>
+
+<template id="logosTpl">
+  <div class="logos">
+    <img src="../assets/pssdc-logo.png" alt="PSSDC" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+    <img src="../assets/lagos-logo.png" alt="Lagos State Government" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+  </div>
+</template>
+
+<script src="../config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="kinds.js"></script>
+<script src="assess.js"></script>
+</body>
+</html>
