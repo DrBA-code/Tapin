@@ -72,6 +72,12 @@
   #bar button[aria-pressed="true"]{border-color:#3fb98a;color:#3fb98a}
   #count{position:absolute;right:calc(18px + env(safe-area-inset-right,0px));top:calc(14px + env(safe-area-inset-top,0px));font-family:var(--mono);font-size:13px;color:rgba(255,255,255,.55);z-index:7}
   #camNote{position:absolute;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:rgba(20,20,20,.85);border:1px solid rgba(255,255,255,.15);padding:8px 14px;border-radius:10px;font-size:14px;z-index:8}
+  #slideWrap canvas{transition:transform .25s, box-shadow .25s}
+  #slideWrap.grabbed canvas{transform:scale(.9)!important;box-shadow:0 0 0 4px #e8b44a,0 0 80px rgba(232,180,74,.55)}
+  #slideWrap.tossed canvas{animation:toss .85s cubic-bezier(.5,0,.3,1)}
+  @keyframes toss{0%{transform:scale(.9)}45%{transform:translateY(-55vh) scale(.3) rotate(-8deg);opacity:0}46%{transform:none;opacity:0}100%{opacity:1}}
+  #grabHint{position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(232,180,74,.95);color:#1b1205;font-weight:700;padding:10px 18px;border-radius:999px;z-index:7;font-size:16px}
+  #armBadge{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));top:calc(14px + env(safe-area-inset-top,0px));font-family:var(--mono);font-size:12px;color:#e8b44a;background:rgba(0,0,0,.45);padding:5px 10px;border-radius:8px;z-index:7}
   .remotebox{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
   .rqr{background:#fff;border-radius:10px;padding:8px;width:130px;height:130px;flex:none}
   .rqr svg{width:100%;height:100%;display:block}
@@ -112,6 +118,7 @@
         <div class="gest"><div class="g">🤚 ⟶</div><b>Left hand, palm to the camera, sweep right: previous</b><span>Show the palm of your left hand and sweep it to your right. Only this goes back, so slides can't slip backwards by accident. Up and down movements are ignored.</span></div>
         <div class="gest"><div class="g">🙌 ↔</div><b>Two hands apart: zoom in</b><span>Raise both hands and pull them apart to zoom into that part of the slide. Push them together to zoom out. Clap to return to full view.</span></div>
         <div class="gest"><div class="g">🤏</div><b>Pinch and drag: move around</b><span>While zoomed, pinch thumb and index finger together and drag to move to another part of the slide. Swipes pause until you zoom back out.</span></div>
+        <div class="gest"><div class="g">✊ → 🖐</div><b>Fist, then open hand: throw</b><span>Grab the slide with a fist (it shrinks and glows), then open your hand towards the room. It lands on participants' phones. Needs step 4 below.</span></div>
         <div class="gest"><div class="g">✋</div><b>Hold palm up: pause</b><span>Show your open palm to the camera and hold it completely still for a second and a half. The screen goes dark with "Eyes up front". Do it again to bring the slide back.</span></div>
       </div>
       <p class="muted small">Stand 1 to 3 metres from the laptop camera, in good light. Keyboard still works: ← → to change slides, B to pause, G to turn gestures on or off, S to turn the sound on or off, Z to turn hand zoom on or off, T to change the transition, H to check your hands again, + and − to zoom, R to reset zoom, C to hide the camera preview.</p>
@@ -140,6 +147,22 @@
       </div>
     </div>
 
+    <div class="panel">
+      <h2>4. Throw to the room (optional)</h2>
+      <p class="muted">Connect to your programme to throw slides to participants' phones: make a <b>fist</b> to grab the slide, then <b>open your hand</b> towards the room. Each slide is thrown once only. Move your hand left or right as you open it to throw to Group A or B.</p>
+      <form id="tForm" class="row" novalidate>
+        <input type="text" id="tCode" placeholder="Programme link code" aria-label="Programme link code" style="text-transform:uppercase;max-width:220px">
+        <input type="password" id="tPin" placeholder="Organiser or coordinator PIN" aria-label="PIN">
+        <button class="btn" type="submit">Connect</button>
+      </form>
+      <div id="tConn" hidden style="display:grid;gap:8px">
+        <div>Connected to <b id="tProg"></b></div>
+        <span class="muted small" id="tArmed"></span>
+        <div class="row"><button class="btn ghost small" id="tRefresh" type="button">Check ticked items</button><button class="btn ghost small" id="tOff" type="button">Disconnect</button></div>
+      </div>
+      <div class="err" id="tErr" role="status"></div>
+    </div>
+
     <div class="row" style="margin-top:22px">
       <button class="btn big" id="startBtn" type="button" disabled style="width:auto;padding-inline:28px">Start presenting</button>
       <a class="btn ghost" href="../">Back to Tap-In</a>
@@ -166,6 +189,8 @@
   <div id="cam"><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas><span class="lbl" id="camLbl">Starting camera…</span><div class="meter" id="meter"></div></div>
   <div id="hud"><div class="pop" id="pop"></div></div>
   <div id="count"></div>
+  <div id="armBadge" hidden></div>
+  <div id="grabHint" hidden></div>
   <div id="remotePanel" hidden><div class="rqr" id="rqrStage"></div><div><b>Phone remote</b><br>Scan, or open <span id="rurlStage"></span><br>Code <b class="rcode" id="rcodeStage"></b></div></div>
   <div id="camNote" hidden></div>
   <div id="bar">

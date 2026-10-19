@@ -49,8 +49,9 @@
     </div>
 
     <div id="console" hidden>
-      <div class="panel">
-        <h2>Start a programme</h2>
+      <div class="row" style="margin-top:22px"><button class="btn" id="newToggle" type="button">+ Create a new portal</button><span class="muted small" id="newDone"></span></div>
+      <div class="panel" id="newPanel" hidden>
+        <div class="row" style="justify-content:space-between"><h2>Start a programme</h2><button class="btn ghost small" id="newClose" type="button">Close</button></div>
         <p class="muted">Each programme gets its own check-in QR code, welcome screen and register.</p>
         <form id="newForm" class="grid2" novalidate>
           <label class="f full" for="newName">Programme name<input type="text" id="newName" placeholder="e.g. AI for Data, Research and Routine Work"></label>

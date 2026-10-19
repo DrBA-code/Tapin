@@ -13,13 +13,14 @@ Entrance check-in and big-screen welcome for PSSDC training programmes. Feature 
 - **Phone remote** (`/remote/#CODE`): backup control from a phone. Air Swipe Slides and the Windows app each show a QR code and 6-letter code; the phone sends next / previous / pause over a Supabase Realtime broadcast channel (no database writes).
 - **Hand check:** both apps learn once per computer which hand the webcam reports as right, and which way a palm faces ("Check my hands").
 - **Throw** (`/throw/#CODE` for the facilitator, `/room/#CODE` for participants): the facilitator throws slides, case studies, links and their contact card (phone + follow links, as a .vcf) to everyone or to Group A / B; cards fly onto participants' phones and are swiped down into *My items*. Participants can send their contact back; the facilitator gets an alert and saves it. Requires `supabase/upgrade-4-throw.sql`.
+- **Grab and throw** (Air Swipe Slides → step 4): connect to a programme with its link code and PIN; a fist grabs the slide and an open hand throws it to the room (each slide once). Items ticked *Ready for hand throw* in the Throw console go instead, once. Requires `supabase/upgrade-5-hand-throw.sql`.
 - **Logos:** add `assets/pssdc-logo.png` and `assets/lagos-logo.png`; they show at the top left of every screen.
 
 Static site (no build step) hosted on Vercel; data and photos in Supabase.
 
 ## Setup
 
-1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it. Then run `supabase/upgrade-2-programmes.sql`, `upgrade-3-coordinators.sql` and `upgrade-4-throw.sql` the same way, in that order.
+1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it. Then run `supabase/upgrade-2-programmes.sql`, `upgrade-3-coordinators.sql`, `upgrade-4-throw.sql` and `upgrade-5-hand-throw.sql` the same way, in that order.
 2. **Key:** put the project's *anon public* key in `config.js` (Supabase → Project Settings → API). Never use the `service_role` key.
 3. **Hosting:** Vercel deploys automatically from the `main` branch. Framework preset: *Other*; no build command.
 

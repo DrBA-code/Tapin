@@ -12,7 +12,7 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognize
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---------------- state ----------------
-let deck = null, page = 1, total = 0;   // deck: { kind: "pdf", doc } or { kind: "images", imgs: [HTMLImageElement] }
+let deck = null, page = 1, total = 0, deckName = "";   // deck: { kind: "pdf", doc } or { kind: "images", imgs: [HTMLImageElement] }
 const cache = new Map();          // page number -> rendered canvas
 let recognizer = null, stream = null, running = false;
 let gesturesOn = true, blanked = false;
@@ -56,6 +56,8 @@ async function loadFiles(files) {
       $("fileName").textContent = imgs.length === 1 ? imgs[0].name : `${imgs.length} pictures (${imgs[0].name} … ${imgs[imgs.length - 1].name})`;
     }
     page = 1; cache.clear();
+    deckName = (pdfFile ? pdfFile.name : imgs[0].name).replace(/\.[^.]+$/, "");
+    deckKey = deckName + "|" + total; loadThrown();
     $("pageCount").textContent = `${total} slide${total === 1 ? "" : "s"}`;
     $("loaded").hidden = false; $("fileErr").textContent = "";
     $("startBtn").disabled = false;
@@ -225,7 +227,7 @@ async function sharpen() {
 // ---------------- phone remote ----------------
 // The phone page (../remote/#CODE) sends next / prev / blank over a Supabase Realtime broadcast channel.
 const REMOTE_URL = new URL("../remote/", location.href).href;
-let remoteCode = null, remoteChan = null;
+let remoteCode = null, remoteChan = null, sbc = null;
 try { remoteCode = sessionStorage.getItem("airswipe_remote"); } catch {}
 if (!remoteCode) {
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; remoteCode = Array.from({ length: 6 }, () => A[Math.floor(Math.random() * A.length)]).join("");
@@ -239,7 +241,7 @@ function qrSvg(text) { if (!window.qrcode) return ""; const q = window.qrcode(0,
   $("rurlStage").textContent = REMOTE_URL.replace(/^https?:\/\//, "");
   const cfg = window.TAPIN_CONFIG || {};
   if (!window.supabase || !cfg.SUPABASE_URL) { $("rstatSetup").textContent = "Phone remote unavailable (no connection)."; return; }
-  const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  const sb = sbc = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   remoteChan = sb.channel("remote-" + remoteCode, { config: { broadcast: { self: false } } });
   remoteChan.on("broadcast", { event: "cmd" }, ({ payload }) => {
     const cmd = payload && payload.cmd;
@@ -257,6 +259,90 @@ function sendRemoteState() {
   if (!remoteChan) return;
   remoteChan.send({ type: "broadcast", event: "state", payload: { page: deck && running ? page : 0, total: deck && running ? total : 0, blank: blanked } });
 }
+
+// ---------------- grab and throw to the room ----------------
+// Close your hand (fist) to grab the slide, open it to throw. Each slide goes once; items ticked in the
+// Throw console go instead of the slide, once, and untick themselves.
+let throwCfg = null, roomChan = null, armedCount = 0, throwing = false, deckKey = "";
+let thrownPages = new Set();
+let grab = {};
+function loadThrown() { try { thrownPages = new Set(JSON.parse(sessionStorage.getItem("airswipe_thrown_" + deckKey) || "[]")); } catch { thrownPages = new Set(); } }
+function saveThrown() { try { sessionStorage.setItem("airswipe_thrown_" + deckKey, JSON.stringify([...thrownPages])); } catch {} }
+async function connectRoom(code, pin, quiet) {
+  if (!sbc) { if (!quiet) $("tErr").textContent = "No connection to the service."; return false; }
+  code = code.trim().toUpperCase();
+  const { data: role, error } = await sbc.rpc("coordinator_check", { p_code: code, p_pin: pin });
+  if (!role) { if (!quiet) $("tErr").textContent = error && /Could not find|schema cache/i.test(error.message) ? "The database needs upgrades 3–5 run first." : "That link code and PIN don't match a programme."; return false; }
+  const { data: prog } = await sbc.from("programmes").select("id,code,name").eq("code", code).maybeSingle();
+  if (!prog) return false;
+  throwCfg = { code, pin, prog };
+  try { sessionStorage.setItem("airswipe_room", JSON.stringify({ code, pin })); } catch {}
+  if (roomChan) sbc.removeChannel(roomChan);
+  roomChan = sbc.channel("room-" + code, { config: { broadcast: { self: false } } });
+  roomChan.on("broadcast", { event: "armed" }, ({ payload }) => { armedCount = payload?.count || 0; showArmed(); });
+  roomChan.subscribe();
+  $("tForm").hidden = true; $("tConn").hidden = false; $("tErr").textContent = "";
+  $("tProg").textContent = prog.name;
+  await refreshArmed();
+  return true;
+}
+async function refreshArmed() {
+  if (!throwCfg) return;
+  const { data } = await sbc.rpc("list_throws", { p_pin: throwCfg.pin, p_programme: throwCfg.prog.id });
+  armedCount = (data || []).filter(t => t.armed).length; showArmed();
+}
+function showArmed() {
+  $("tArmed").textContent = armedCount ? `${armedCount} ticked item${armedCount > 1 ? "s" : ""} will go with your next throw.` : "Your next throw sends the slide on screen.";
+  $("armBadge").hidden = !throwCfg; $("armBadge").textContent = armedCount ? `✊ ${armedCount} ticked to throw` : "✊ Grab & throw ready";
+}
+$("tForm").addEventListener("submit", e => { e.preventDefault(); $("tErr").textContent = "Checking…"; connectRoom($("tCode").value, $("tPin").value); });
+$("tOff").addEventListener("click", () => { throwCfg = null; if (roomChan) sbc.removeChannel(roomChan); roomChan = null; try { sessionStorage.removeItem("airswipe_room"); } catch {} $("tForm").hidden = false; $("tConn").hidden = true; showArmed(); });
+$("tRefresh").addEventListener("click", refreshArmed);
+setTimeout(() => { try { const r = JSON.parse(sessionStorage.getItem("airswipe_room") || "null"); if (r) connectRoom(r.code, r.pin, true); } catch {} }, 600);
+showArmed();
+
+function showGrab(on) {
+  $("slideWrap").classList.toggle("grabbed", on);
+  $("grabHint").hidden = !on;
+  if (on) $("grabHint").textContent = armedCount ? `✊ Grabbed ${armedCount} ticked item${armedCount > 1 ? "s" : ""}: open your hand to throw` : (thrownPages.has(page) ? "✊ Already thrown this slide" : "✊ Grabbed: open your hand towards the room to throw");
+}
+const fromOf = t => (t === "A" ? "left" : t === "B" ? "right" : "top");
+async function doThrow(target) {
+  if (!throwCfg || throwing) return;
+  throwing = true;
+  const where = target === "all" ? "everyone" : "Group " + target;
+  try {
+    if (armedCount > 0) {
+      const { data, error } = await sbc.rpc("throw_armed", { p_pin: throwCfg.pin, p_programme: throwCfg.prog.id, p_target: target });
+      if (error) throw error;
+      (data || []).forEach(t => roomChan?.send({ type: "broadcast", event: "throw", payload: { id: t.id, target: t.target, from: fromOf(target) } }));
+      armedCount = 0; showArmed();
+      tossAnim(); swoosh("next"); flash(`Thrown to ${where} ✓`);
+      return;
+    }
+    if (thrownPages.has(page)) { flash("Already thrown ✓"); return; }
+    const c = slideEl(); if (!c) return;
+    const n = page; thrownPages.add(n); saveThrown();
+    tossAnim(); swoosh("next");
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    const path = `${throwCfg.code}/slide-${crypto.randomUUID()}.jpg`;
+    const up = await sbc.storage.from("throws").upload(path, blob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+    const url = sbc.storage.from("throws").getPublicUrl(path).data.publicUrl;
+    const title = `Slide ${n}${deckName ? " · " + deckName : ""}`;
+    const prep = await sbc.rpc("prepare_throw", { p_pin: throwCfg.pin, p_programme: throwCfg.prog.id, p_kind: "image", p_title: title, p_url: url, p_payload: { page: n } });
+    if (prep.error) throw prep.error;
+    const sent = await sbc.rpc("send_throw", { p_pin: throwCfg.pin, p_throw: prep.data.id, p_target: target });
+    if (sent.error) throw sent.error;
+    roomChan?.send({ type: "broadcast", event: "throw", payload: { id: sent.data.id, target: sent.data.target, from: fromOf(target) } });
+    flash(`Thrown to ${where} ✓`);
+  } catch (err) {
+    console.error(err);
+    thrownPages.delete(page); saveThrown();
+    camNote("Couldn't throw: " + (err?.message || "check the connection")); setTimeout(() => camNote(""), 5000);
+  } finally { throwing = false; }
+}
+function tossAnim() { const w = $("slideWrap"); w.classList.remove("tossed"); void w.offsetWidth; w.classList.add("tossed"); setTimeout(() => w.classList.remove("tossed"), 900); }
 
 // ---------------- presenting ----------------
 $("startBtn").addEventListener("click", start);
@@ -458,6 +544,7 @@ function loop() {
   }
   zoomGesture = null;
   if (!lm && history.length && now - lastSeen < DROPOUT_MS) { if (gesturesOn && zoom <= 1) trySwipe(now); return; } // fast swipes blur the hand for a few frames
+  if (!lm && grab.active && now - (grab.last || 0) > 1500) { grab = {}; showGrab(false); }
   if (!lm) { history = []; handSince = 0; holdStart = 0; holdLatched = false; setMeter(0); $("cam").classList.remove("hot"); if (recognizer) $("camLbl").textContent = "Watching for gestures"; return; }
   $("cam").classList.add("hot");
   lastSeen = now;
@@ -488,6 +575,27 @@ function loop() {
     } else pinchPrev = null;
     history = []; holdStart = 0; setMeter(0);
     return;
+  }
+
+  // Grab and throw: hold a fist to grab the slide, then open the hand to throw it.
+  if (throwCfg) {
+    const fist = g && g.categoryName === "Closed_Fist" && g.score > 0.6;
+    if (fist) {
+      if (!grab.since) { grab.since = now; grab.x = x; }
+      if (!grab.active && now - grab.since > 350) { grab.active = true; grab.x = x; showGrab(true); }
+      grab.last = now;
+    } else if (grab.active && palm) {
+      const dx = x - grab.x; // camera picture is not mirrored: towards the presenter's left is dx > 0
+      const target = dx > 0.12 ? "A" : dx < -0.12 ? "B" : "all";
+      grab = {}; showGrab(false);
+      history = []; holdStart = 0; holdLatched = true; cooldownUntil = now + COOLDOWN_MS;
+      doThrow(target);
+      return;
+    } else {
+      grab.since = 0;
+      if (grab.active && now - grab.last > 1500) { grab = {}; showGrab(false); }
+    }
+    if (grab.active) { history = []; holdStart = 0; setMeter(0); return; }
   }
 
   // Palm hold (still, open palm) toggles the pause screen.

@@ -31,6 +31,9 @@
   .titem .meta{min-width:0;display:grid;gap:6px}
   .titem b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .throwbar{display:flex;gap:6px;flex-wrap:wrap}
+  .arm{display:inline-flex;gap:8px;align-items:center;font-size:14px;font-weight:600;cursor:pointer}
+  .arm input{width:18px;height:18px}
+  .titem.armed{border-color:var(--gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 30%,transparent)}
   .throwbar button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:9px 12px;font-weight:600;cursor:pointer;font-size:14px}
   .throwbar button.all{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
   .throwbar button:hover{border-color:var(--accent)}
@@ -120,7 +123,7 @@
           <input type="url" id="linkUrl" placeholder="https://…">
           <button class="btn small" type="submit">Add</button>
         </form>
-        <span class="muted small">PDFs and pictures up to 25 MB. Throw <b>←</b> to Group A, <b>↑</b> to everyone, or <b>→</b> to Group B.</span>
+        <span class="muted small">PDFs and pictures up to 25 MB. Throw with the buttons (<b>←</b> Group A, <b>↑</b> everyone, <b>→</b> Group B), or tick <b>Ready for hand throw</b> and use the grab-and-throw gesture in Air Swipe Slides. Ticked items go once, then untick themselves.</span>
         <div class="err" id="addErr" role="status"></div>
       </div>
 
@@ -200,6 +203,7 @@
       $("nAll").textContent = a + b + n; $("nA").textContent = a; $("nB").textContent = b; $("nN").textContent = n;
     });
     channel.on("broadcast", { event: "contact" }, ({ payload }) => { alertContact(payload); loadContacts(); });
+    channel.on("broadcast", { event: "throw" }, () => loadThrows());   // a hand throw from Air Swipe Slides
     channel.subscribe(st => { if (st === "SUBSCRIBED") channel.track({ console: true }); });
   }
   $("copyRoom").addEventListener("click", async () => { try { await navigator.clipboard.writeText(ROOM); $("copyRoom").textContent = "Copied"; } catch { $("copyRoom").textContent = ROOM; } setTimeout(() => ($("copyRoom").textContent = "Copy room link"), 2000); });
@@ -281,13 +285,23 @@
     $("tlist").innerHTML = prepared.length ? prepared.map(t => {
       const thumb = t.kind === "image" ? `<img src="${esc(t.url)}" alt="" loading="lazy">` : KIND[t.kind];
       const n = sends(t.url);
-      return `<div class="titem" data-id="${esc(t.id)}"><div class="ic">${thumb}</div><div class="meta">
+      return `<div class="titem${t.armed ? " armed" : ""}" data-id="${esc(t.id)}"><div class="ic">${thumb}</div><div class="meta">
         <b>${esc(t.title)}</b>
         <span class="sent">${t.kind === "contact" ? "Contact card" : t.kind === "image" ? "Picture" : t.kind === "link" ? "Link" : "Document"}${n ? ` · thrown ${n}×` : " · not thrown yet"}</span>
+        <label class="arm"><input type="checkbox" data-arm ${t.armed ? "checked" : ""}> Ready for hand throw</label>
         <div class="throwbar"><button data-t="A" type="button">← Group A</button><button class="all" data-t="all" type="button">↑ Everyone</button><button data-t="B" type="button">Group B →</button><button class="del" data-del type="button" title="Also removes it from participants' phones">Remove</button></div>
       </div></div>`;
     }).join("") : `<p class="muted">Nothing to throw yet. Add your contact card, slides or case studies above.</p>`;
   }
+  $("tlist").addEventListener("change", async e => {
+    if (!e.target.matches("[data-arm]")) return;
+    const card = e.target.closest(".titem"), on = e.target.checked;
+    card.classList.toggle("armed", on);
+    const { error } = await sb.rpc("set_armed", { p_pin: pin, p_throw: card.dataset.id, p_armed: on });
+    if (error) { e.target.checked = !on; card.classList.toggle("armed", !on); note(/Could not find the function|schema cache/i.test(error.message) ? "The database needs an update: run upgrade-5-hand-throw.sql in Supabase." : "Couldn't update that tick."); return; }
+    await loadThrows();
+    channel?.send({ type: "broadcast", event: "armed", payload: { count: throwsList.filter(t => t.armed).length } });
+  });
   $("tlist").addEventListener("click", async e => {
     const card = e.target.closest(".titem"); if (!card) return;
     const id = card.dataset.id;

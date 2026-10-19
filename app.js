@@ -136,10 +136,20 @@
       if (/PIN/.test(m)) return (err.textContent = /Coordinator PIN/.test(m) ? m + "." : "Your session expired. Sign in again.");
       return (err.textContent = "Couldn't open the portal: " + m);
     }
-    err.textContent = "Portal opened. Its QR code is below.";
+    err.textContent = "";
     $("newForm").reset();
+    showNewPanel(false);
+    $("newDone").textContent = `“${name}” is open. Its QR code is at the top of the list.`;
     loadProgrammes();
   });
+
+  // The "Start a programme" box stays closed until you ask for it, and closes again once the portal is open.
+  function showNewPanel(open) {
+    $("newPanel").hidden = !open; $("newToggle").hidden = open;
+    if (open) { $("newDone").textContent = ""; $("newName").focus(); }
+  }
+  $("newToggle").addEventListener("click", () => showNewPanel(true));
+  $("newClose").addEventListener("click", () => { showNewPanel(false); $("newErr").textContent = ""; });
 
   let progLoadTimer = null;
   function loadProgrammes() { clearTimeout(progLoadTimer); progLoadTimer = setTimeout(doLoadProgrammes, 150); }
@@ -151,7 +161,7 @@
     const counts = {};
     (rows || []).forEach(r => { const c = (counts[r.programme_id] ||= { in: 0, out: 0 }); c.in++; if (r.tap_out_at) c.out++; });
     const list = $("progList");
-    if (!progs || !progs.length) { list.innerHTML = `<p class="muted">No programmes yet. Start one above.</p>`; return; }
+    if (!progs || !progs.length) { list.innerHTML = `<p class="muted">No programmes yet. Create your first portal above.</p>`; showNewPanel(true); return; }
     list.innerHTML = progs.map(p => {
       const c = counts[p.id] || { in: 0, out: 0 };
       return `<article class="prog ${p.status}" data-id="${esc(p.id)}">
