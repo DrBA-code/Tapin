@@ -130,7 +130,12 @@
     if (cpin.length < 4) return (err.textContent = "Set a coordinator PIN of at least 4 characters.");
     err.textContent = "Opening portal…";
     const { error } = await sb.rpc("create_programme", { p_pin: pin(), p_name: name, p_programme_code: pcode, p_coordinator: coord, p_coordinator_pin: cpin });
-    if (error) return (err.textContent = /PIN/.test(error.message) ? "Your session expired. Sign in again." : "Couldn't open the portal. Try again.");
+    if (error) {
+      const m = error.message || "";
+      if (/Could not find the function|does not exist|schema cache/i.test(m)) return (err.textContent = "The database needs an update: run upgrade-3-coordinators.sql (and upgrade-4-throw.sql) in Supabase, then try again.");
+      if (/PIN/.test(m)) return (err.textContent = /Coordinator PIN/.test(m) ? m + "." : "Your session expired. Sign in again.");
+      return (err.textContent = "Couldn't open the portal: " + m);
+    }
     err.textContent = "Portal opened. Its QR code is below.";
     $("newForm").reset();
     loadProgrammes();

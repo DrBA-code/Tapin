@@ -161,7 +161,11 @@
   function qrSvg(t) { if (!window.qrcode) return ""; const q = window.qrcode(0, "M"); q.addData(t); q.make(); return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
 
   // ---------- access ----------
-  async function check(p) { const { data } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p }); return data || null; }
+  async function check(p) {
+    const { data, error } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p });
+    if (error && /Could not find the function|does not exist|schema cache/i.test(error.message || "")) note("The database needs an update: run upgrade-3-coordinators.sql and upgrade-4-throw.sql in Supabase, then reload this page.");
+    return data || null;
+  }
   async function boot() {
     if (!sb) return note("Can't reach the database. Check the connection.");
     if (!code) return note("Open the Throw console from your programme on the menu page.");
@@ -178,7 +182,7 @@
     e.preventDefault();
     const p = $("pin").value; $("pinErr").textContent = "Checking…";
     const role = await check(p);
-    if (!role) return ($("pinErr").textContent = "That PIN is wrong for this programme.");
+    if (!role) return ($("pinErr").textContent = $("note").hidden ? "That PIN is wrong for this programme. Programmes made before coordinator PINs existed need one set first (menu → Edit → New coordinator PIN), or use the organiser PIN." : "The database needs updating first (see above).");
     ss.set(role === "organiser" ? "tapin_pin" : "tapin_cpin_" + code, p);
     pin = p; $("lock").hidden = true; open();
   });
