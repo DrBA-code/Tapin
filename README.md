@@ -10,6 +10,8 @@ Entrance check-in and big-screen welcome for PSSDC training programmes. Feature 
 - **QR poster** (`/#qr/CODE`): full-screen QR code to project or print.
 - **Air Swipe Slides** (`/slides/`): present a PDF and change slides by waving a hand at the webcam (right palm sweeping left for next, left palm sweeping right for previous; hold an open palm still to pause; choose slide transitions). Runs entirely in the browser with MediaPipe hand tracking.
 - **Air Swipe for PowerPoint** (`desktop/`): a Windows app (Python, MediaPipe, PyInstaller) that sends arrow keys, B and keypad +/− to whatever slideshow is in front. GitHub Actions builds `AirSwipe.exe` on every change to `desktop/` and publishes it to the `airswipe-desktop` release.
+- **Phone remote** (`/remote/#CODE`): backup control from a phone. Air Swipe Slides and the Windows app each show a QR code and 6-letter code; the phone sends next / previous / pause over a Supabase Realtime broadcast channel (no database writes).
+- **Hand check:** both apps learn once per computer which hand the webcam reports as right, and which way a palm faces ("Check my hands").
 - **Logos:** add `assets/pssdc-logo.png` and `assets/lagos-logo.png`; they show at the top left of every screen.
 
 Static site (no build step) hosted on Vercel; data and photos in Supabase.

@@ -30,11 +30,18 @@ import cv2
 from PIL import Image, ImageTk
 from pynput import keyboard
 import mediapipe as mp
+import qrcode
+import websocket  # websocket-client
+
+SUPABASE_URL = "https://ncfgthjozyombclfjxmk.supabase.co"
+SUPABASE_KEY = "sb_publishable_Y5xdRl5QmqUVYCTznlpKbg_HXx7JAT1"   # public key, safe to ship
+REMOTE_PAGE = "https://tapin-alpha.vercel.app/remote/#"
 
 APP = "Air Swipe for PowerPoint"
 SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "AirSwipe")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
-DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "roles": True, "swap": False, "sensitivity": 3, "on_top": True, "camera": 0}
+DEFAULTS = {"gestures": True, "sound": True, "zoom": True, "roles": True, "swap": False, "sensitivity": 3, "on_top": True, "camera": 0,
+            "right_label": None, "right_sign": None}  # learned once by "Check my hands"
 SENS_DIST = [0.26, 0.21, 0.16, 0.12, 0.09]  # share of the camera picture the hand must travel
 SENS_LABELS = ["Very low", "Low", "Medium", "High", "Very high"]
 
@@ -128,20 +135,30 @@ def is_open_palm(lm):
     return fingers and thumb
 
 
-def which_hand(label, swap):
-    """MediaPipe's "Left"/"Right" label matches the presenter's own hand for this camera picture (confirmed in testing)."""
-    h = {"Left": "left", "Right": "right"}.get(label)
-    if h and swap:
+def palm_z(lm):
+    """Turn of wrist -> index knuckle -> little-finger knuckle; its sign flips between palm and back of the hand."""
+    ax, ay = lm[5].x - lm[0].x, lm[5].y - lm[0].y
+    bx, by = lm[17].x - lm[0].x, lm[17].y - lm[0].y
+    return ax * by - ay * bx
+
+
+def which_hand(label, settings):
+    """Webcams differ in how left and right come out, so use what "Check my hands" learned on this computer."""
+    right_label = settings.get("right_label")
+    if right_label:
+        h = "right" if label == right_label else "left" if label else None
+    else:
+        h = {"Left": "left", "Right": "right"}.get(label)
+    if h and settings.get("swap"):
         h = "left" if h == "right" else "right"
     return h
 
 
-def palm_facing(lm, label):
-    """True when the palm (front of the hand) faces the camera, from the turn wrist -> index knuckle -> little-finger knuckle."""
-    ax, ay = lm[5].x - lm[0].x, lm[5].y - lm[0].y
-    bx, by = lm[17].x - lm[0].x, lm[17].y - lm[0].y
-    z = ax * by - ay * bx
-    return z < 0 if label == "Right" else z > 0
+def palm_facing(lm, hand, settings):
+    """True when the palm faces the camera. A left palm turns the opposite way to a right palm."""
+    right_sign = settings.get("right_sign") or -1
+    expected = right_sign if hand == "right" else -right_sign
+    return palm_z(lm) * expected > 0
 
 
 class Engine:
@@ -162,6 +179,31 @@ class Engine:
         self.last_dir = None
         self.last_dir_at = 0
         self.seen_hand = (None, False)
+        self.calib = None
+
+    # ---- one-time check: the presenter raises their RIGHT palm and we learn how this webcam reports it
+    def start_calibration(self):
+        self.calib = {"start": time.monotonic(), "labels": [], "signs": []}
+        self.app.status_q.put(("calib", "Raise your RIGHT hand, palm facing the camera, and hold it there…"))
+
+    def calibrate(self, lm, label, now):
+        c = self.calib
+        if label:
+            c["labels"].append(label)
+            z = palm_z(lm)
+            if abs(z) > 1e-4:
+                c["signs"].append(1 if z > 0 else -1)
+        if len(c["labels"]) >= 25 and len(c["signs"]) >= 15:
+            s = self.app.settings
+            s["right_label"] = max(set(c["labels"]), key=c["labels"].count)
+            s["right_sign"] = 1 if sum(c["signs"]) > 0 else -1
+            s["swap"] = False
+            save_settings(s)
+            self.calib = None
+            self.app.status_q.put(("calibdone", "Hands checked ✓  Right palm ← next · Left palm → back"))
+        elif now - c["start"] > 15:
+            self.calib = None
+            self.app.status_q.put(("calibfail", "Couldn't see your hand clearly. Click Check my hands to try again."))
 
     def tap(self, key):
         try:
@@ -174,7 +216,7 @@ class Engine:
 
     def update(self, hands, now, labels=None):
         s = self.app.settings
-        if not s["gestures"]:
+        if not s["gestures"] and self.calib is None:
             self.reset_single(); self.zoom_ref = None
             return 0.0
         # ---- two hands: zoom
@@ -182,6 +224,11 @@ class Engine:
             self.reset_single()
             return self.two_hands(hands, now)
         self.zoom_ref = None
+        if not hands and self.calib is not None:
+            if now - self.calib["start"] > 15:
+                self.calib = None
+                self.app.status_q.put(("calibfail", "Couldn't see your hand. Click Check my hands to try again."))
+            return 0.0
         if not hands:
             # Fast movement often loses the hand for a few frames, or it leaves the picture at the end of a swipe.
             # Judge the swipe on what was already seen before forgetting it.
@@ -196,8 +243,11 @@ class Engine:
             self.hand_since = now
         x, y = palm_centre(lm)
         label = (labels or [None])[0]
-        hand = which_hand(label, s["swap"])
-        front = palm_facing(lm, label) if hand else False
+        if self.calib is not None:
+            self.calibrate(lm, label, now)
+            return 0.0
+        hand = which_hand(label, s)
+        front = palm_facing(lm, hand, s) if hand else False
         self.seen_hand = (hand, front)
         self.history.append((now, x, y, hand, front))
         self.history = [h for h in self.history if now - h[0] <= WINDOW_S]
@@ -350,6 +400,63 @@ class Camera(threading.Thread):
         cap.release()
 
 
+# ---------------------------------------------------------------- phone remote
+class Remote(threading.Thread):
+    """Listens on a Supabase Realtime channel for Next / Previous / Pause sent from the phone remote page."""
+
+    def __init__(self, app, code):
+        super().__init__(daemon=True)
+        self.app, self.code = app, code
+        self.topic = f"realtime:remote-{code}"
+        self.ref = 0
+        self.ws = None
+
+    def send(self, event, payload, topic=None):
+        self.ref += 1
+        try:
+            self.ws.send(json.dumps({"topic": topic or self.topic, "event": event, "payload": payload, "ref": str(self.ref)}))
+        except Exception:
+            pass
+
+    def run(self):
+        url = SUPABASE_URL.replace("https://", "wss://") + f"/realtime/v1/websocket?apikey={SUPABASE_KEY}&vsn=1.0.0"
+        while True:
+            try:
+                self.ws = websocket.create_connection(url, timeout=30)
+                self.send("phx_join", {"config": {"broadcast": {"self": False, "ack": False}, "presence": {"key": ""}, "private": False}})
+                self.app.status_q.put(("remote", "Phone remote ready"))
+                last_beat = time.monotonic()
+                self.ws.settimeout(5)
+                while True:
+                    if time.monotonic() - last_beat > 25:
+                        self.send("heartbeat", {}, topic="phoenix"); last_beat = time.monotonic()
+                    try:
+                        raw = self.ws.recv()
+                    except websocket.WebSocketTimeoutException:
+                        continue
+                    if not raw:
+                        raise ConnectionError("closed")
+                    msg = json.loads(raw)
+                    if msg.get("event") == "broadcast":
+                        inner = msg.get("payload", {})
+                        if inner.get("event") == "cmd":
+                            self.handle(inner.get("payload", {}).get("cmd"))
+            except Exception:
+                self.app.status_q.put(("remote", "Phone remote reconnecting…"))
+                time.sleep(3)
+
+    def handle(self, cmd):
+        e = self.app.engine
+        if cmd == "next":
+            e.tap(keyboard.Key.right); self.app.event("next", "Next ▶ (phone)")
+        elif cmd == "prev":
+            e.tap(keyboard.Key.left); self.app.event("prev", "◀ Previous (phone)")
+        elif cmd == "blank":
+            e.blank = not e.blank; e.tap("b"); self.app.event("pause", "Screen dark (phone)" if e.blank else "Slide back (phone)")
+        if cmd in ("next", "prev", "blank", "hello"):
+            self.send("broadcast", {"type": "broadcast", "event": "state", "payload": {"ok": True, "app": "desktop", "blank": e.blank}})
+
+
 # ---------------------------------------------------------------- window
 class App:
     def __init__(self):
@@ -391,7 +498,7 @@ class App:
         self.hint.pack(anchor="w", padx=14, pady=(0, 8))
 
         self.vars = {}
-        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right palm ← next, left palm → back"), ("swap", "Swap hands (left-handed, or wrong hand shown)"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
+        for key, label in (("gestures", "Gestures on   (F9 from anywhere)"), ("roles", "Right palm ← next, left palm → back"), ("sound", "Swoosh sound"), ("zoom", "Hand zoom (two hands; clap to reset)"), ("on_top", "Keep this window on top")):
             v = tk.BooleanVar(value=self.settings[key]); self.vars[key] = v
             ttk.Checkbutton(self.root, text=label, variable=v, command=lambda k=key: self.toggle(k)).pack(anchor="w", padx=14)
 
@@ -403,6 +510,22 @@ class App:
         self.sens.set(self.settings["sensitivity"])
         self.sens.pack(fill="x", padx=14)
 
+        tk.Button(self.root, text="Check my hands", command=self.engine.start_calibration, bg="#20372e", fg="#eef4ef",
+                  activebackground=GREEN, relief="flat", font=("Segoe UI", 10), padx=10, pady=4).pack(anchor="w", padx=14, pady=(6, 0))
+
+        # phone remote
+        self.remote_code = "".join(random.choice("ABCDEFGHJKMNPQRSTUVWXYZ23456789") for _ in range(6))
+        remote_row = tk.Frame(self.root, bg=DARK); remote_row.pack(fill="x", padx=14, pady=(10, 0))
+        qr_img = qrcode.make(REMOTE_PAGE + self.remote_code, box_size=3, border=1).get_image().convert("RGB").resize((110, 110))
+        self.qr_photo = ImageTk.PhotoImage(qr_img)
+        tk.Label(remote_row, image=self.qr_photo, bg="white").pack(side="left")
+        remote_txt = tk.Frame(remote_row, bg=DARK); remote_txt.pack(side="left", padx=10, fill="x")
+        tk.Label(remote_txt, text="Phone remote", bg=DARK, fg=GOLD, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(remote_txt, text="Scan to control the slides from your phone.", bg=DARK, fg=MUTED, font=("Segoe UI", 9), wraplength=190, justify="left").pack(anchor="w")
+        tk.Label(remote_txt, text=f"Code: {self.remote_code}", bg=DARK, fg="#eef4ef", font=("Consolas", 12, "bold")).pack(anchor="w", pady=(4, 0))
+        self.remote_status = tk.Label(remote_txt, text="Connecting…", bg=DARK, fg=MUTED, font=("Segoe UI", 9))
+        self.remote_status.pack(anchor="w")
+
         tk.Label(self.root, text="Right palm, sweep left: next\nLeft palm, sweep right: previous\nHold open palm still 1.5 s: black screen  ·  Two hands: zoom",
                  bg=DARK, fg=MUTED, font=("Segoe UI", 9), justify="left").pack(anchor="w", padx=14, pady=(8, 14))
 
@@ -411,6 +534,10 @@ class App:
         self.hotkeys.start()
         self.camera = Camera(self)
         self.camera.start()
+        self.remote = Remote(self, self.remote_code)
+        self.remote.start()
+        if not self.settings.get("right_label"):
+            self.root.after(1500, self.engine.start_calibration)
         self.root.after(30, self.poll)
 
     def no_focus_steal(self):
@@ -465,6 +592,13 @@ class App:
                     self.show_msg(text)
                 elif kind == "ok":
                     self.status.config(text=text, fg="#eef4ef")
+                elif kind == "calib":
+                    self.status.config(text="Checking your hands", fg=GOLD); self.hint.config(text=text); self.msg_until = float("inf")
+                elif kind in ("calibdone", "calibfail"):
+                    self.status.config(text="Hands checked" if kind == "calibdone" else "Hand check failed", fg=GREEN if kind == "calibdone" else "#f2786f")
+                    self.hint.config(text=text); self.msg_until = time.monotonic() + 3
+                elif kind == "remote":
+                    self.remote_status.config(text=text, fg=GREEN if "ready" in text else MUTED)
         except queue.Empty:
             pass
         try:

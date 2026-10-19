@@ -137,24 +137,47 @@ function swoosh(kind) {
 }
 
 // ---------------- which hand does what ----------------
-// MediaPipe's "Left"/"Right" label matches the presenter's own hand for this camera picture (confirmed in testing).
-const handRoles = () => $("handRoles").checked;   // right hand = next, left hand = back
+// Webcams differ in how left and right come out, so "Check my hands" learns it once on each computer.
+const handRoles = () => $("handRoles").checked;   // right palm = next, left palm = back
 const swapHands = () => $("swapHands").checked;
 try { const v = localStorage.getItem("airswipe_roles"); if (v !== null) $("handRoles").checked = v === "1"; } catch {}
 try { const v = localStorage.getItem("airswipe_swap"); if (v !== null) $("swapHands").checked = v === "1"; } catch {}
 $("handRoles").addEventListener("change", () => { try { localStorage.setItem("airswipe_roles", handRoles() ? "1" : "0"); } catch {} });
 $("swapHands").addEventListener("change", () => { try { localStorage.setItem("airswipe_swap", swapHands() ? "1" : "0"); } catch {} });
+let handCal = null;   // { rightLabel, rightSign }
+try { handCal = JSON.parse(localStorage.getItem("airswipe_handcal")); } catch {}
+let calib = null;     // while checking: { start, labels: [], signs: [] }
+const palmZ = lm => (lm[5].x - lm[0].x) * (lm[17].y - lm[0].y) - (lm[5].y - lm[0].y) * (lm[17].x - lm[0].x);
 function whichHand(label) {
-  let h = label === "Left" ? "left" : label === "Right" ? "right" : null;
-  if (h && swapHands()) h = h === "right" ? "left" : "right";
+  if (!label) return null;
+  let h = handCal?.rightLabel ? (label === handCal.rightLabel ? "right" : "left") : (label === "Left" ? "left" : "right");
+  if (swapHands()) h = h === "right" ? "left" : "right";
   return h;
 }
-// Is the palm (front of the hand) facing the camera? Sign of the turn wrist -> index knuckle -> little-finger knuckle.
-function palmFacing(lm, label) {
-  // Uses the hand as the camera sees it (not the swap setting): a right palm turns one way, a left palm the other.
-  const ax = lm[5].x - lm[0].x, ay = lm[5].y - lm[0].y, bx = lm[17].x - lm[0].x, by = lm[17].y - lm[0].y;
-  const z = ax * by - ay * bx;
-  return label === "Right" ? z < 0 : z > 0;   // a right palm turns one way, a left palm the other
+// Is the palm facing the camera? A left palm turns the opposite way to a right palm.
+function palmFacing(lm, hand) {
+  const rightSign = handCal?.rightSign || -1;
+  return palmZ(lm) * (hand === "right" ? rightSign : -rightSign) > 0;
+}
+function startHandCheck() {
+  calib = { start: performance.now(), labels: [], signs: [] };
+  camNote("Checking your hands: raise your RIGHT hand, palm facing the camera, and hold it there…");
+}
+function handCheckFrame(lm, label, now) {
+  if (lm && label) {
+    calib.labels.push(label);
+    const z = palmZ(lm); if (Math.abs(z) > 1e-4) calib.signs.push(z > 0 ? 1 : -1);
+  }
+  if (calib.labels.length >= 25 && calib.signs.length >= 15) {
+    handCal = { rightLabel: majority(calib.labels), rightSign: calib.signs.reduce((a, b) => a + b, 0) > 0 ? 1 : -1 };
+    try { localStorage.setItem("airswipe_handcal", JSON.stringify(handCal)); } catch {}
+    if (swapHands()) { $("swapHands").checked = false; $("swapHands").dispatchEvent(new Event("change")); }
+    calib = null; camNote("Hands checked ✓  Right palm sweep left = next · Left palm sweep right = back");
+    setTimeout(() => camNote(""), 3500);
+  } else if (now - calib.start > 15000) {
+    calib = null; camNote("Couldn't see your hand clearly. Press H or the Check my hands button to try again.");
+    setTimeout(() => camNote(""), 5000);
+  }
 }
 const majority = arr => { const c = {}; arr.forEach(v => { if (v != null) c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || null; };
 
@@ -197,6 +220,42 @@ async function sharpen() {
   const old = slideEl(); if (!old) return;
   c.style.transform = old.style.transform; c.style.transition = "none";
   old.replaceWith(c); sharpFor = want;
+}
+
+// ---------------- phone remote ----------------
+// The phone page (../remote/#CODE) sends next / prev / blank over a Supabase Realtime broadcast channel.
+const REMOTE_URL = new URL("../remote/", location.href).href;
+let remoteCode = null, remoteChan = null;
+try { remoteCode = sessionStorage.getItem("airswipe_remote"); } catch {}
+if (!remoteCode) {
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; remoteCode = Array.from({ length: 6 }, () => A[Math.floor(Math.random() * A.length)]).join("");
+  try { sessionStorage.setItem("airswipe_remote", remoteCode); } catch {}
+}
+function qrSvg(text) { if (!window.qrcode) return ""; const q = window.qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
+(function setupRemote() {
+  const link = REMOTE_URL + "#" + remoteCode;
+  ["rqrSetup", "rqrStage"].forEach(id => ($(id).innerHTML = qrSvg(link)));
+  ["rcodeSetup", "rcodeStage"].forEach(id => ($(id).textContent = remoteCode));
+  $("rurlStage").textContent = REMOTE_URL.replace(/^https?:\/\//, "");
+  const cfg = window.TAPIN_CONFIG || {};
+  if (!window.supabase || !cfg.SUPABASE_URL) { $("rstatSetup").textContent = "Phone remote unavailable (no connection)."; return; }
+  const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  remoteChan = sb.channel("remote-" + remoteCode, { config: { broadcast: { self: false } } });
+  remoteChan.on("broadcast", { event: "cmd" }, ({ payload }) => {
+    const cmd = payload && payload.cmd;
+    $("rstatSetup").textContent = "Phone connected ✓";
+    if (running && deck) {
+      if (cmd === "next") { if (blanked) setBlank(false); else { flash("▶"); next(); } }
+      else if (cmd === "prev") { if (blanked) setBlank(false); else { flash("◀"); prev(); } }
+      else if (cmd === "blank") setBlank(!blanked);
+    }
+    sendRemoteState();
+  });
+  remoteChan.subscribe(st => { if (st === "SUBSCRIBED") $("rstatSetup").textContent = "Ready: scan with your phone"; else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") $("rstatSetup").textContent = "Phone remote reconnecting…"; });
+})();
+function sendRemoteState() {
+  if (!remoteChan) return;
+  remoteChan.send({ type: "broadcast", event: "state", payload: { page: deck && running ? page : 0, total: deck && running ? total : 0, blank: blanked } });
 }
 
 // ---------------- presenting ----------------
@@ -262,10 +321,11 @@ async function go(n, dir) {
   }
   $("count").textContent = `${page} / ${total}`;
   prefetch();
+  sendRemoteState();
 }
 const next = () => { if (blanked) return; if (page < total) swoosh("next"); go(page + 1, 1); };
 const prev = () => { if (blanked) return; if (page > 1) swoosh("prev"); go(page - 1, -1); };
-function setBlank(on) { blanked = on; $("blank").hidden = !on; flash(on ? "✋" : "▶"); swoosh("pause"); }
+function setBlank(on) { blanked = on; $("blank").hidden = !on; flash(on ? "✋" : "▶"); swoosh("pause"); sendRemoteState(); }
 
 function flash(text) {
   const p = $("pop"); p.textContent = text;
@@ -288,6 +348,8 @@ $("bFs").addEventListener("click", async () => { try { document.fullscreenElemen
 $("bExit").addEventListener("click", exit);
 $("bZoom").addEventListener("click", toggleZoom);
 $("bTrans").addEventListener("click", cycleTransition);
+$("bRemote").addEventListener("click", () => { $("remotePanel").hidden = !$("remotePanel").hidden; });
+$("bHands").addEventListener("click", () => { if (recognizer) startHandCheck(); });
 function toggleGestures() {
   gesturesOn = !gesturesOn;
   $("bGest").setAttribute("aria-pressed", gesturesOn); $("bGest").textContent = gesturesOn ? "Gestures on" : "Gestures off";
@@ -313,6 +375,8 @@ addEventListener("keydown", e => {
   else if (e.key === "s" || e.key === "S") { $("sound").checked = !soundOn(); $("sound").dispatchEvent(new Event("change")); flash(soundOn() ? "🔊" : "🔇"); }
   else if (e.key === "z" || e.key === "Z") toggleZoom();
   else if (e.key === "t" || e.key === "T") cycleTransition();
+  else if (e.key === "p" || e.key === "P") $("remotePanel").hidden = !$("remotePanel").hidden;
+  else if ((e.key === "h" || e.key === "H") && recognizer) startHandCheck();
   else if (e.key === "r" || e.key === "R" || e.key === "0") resetZoom();
   else if (e.key === "+" || e.key === "=") zoomTo(zoom * 1.25, 0, 0);
   else if (e.key === "-" || e.key === "_") zoomTo(zoom / 1.25, 0, 0);
@@ -364,6 +428,7 @@ async function startTracking() {
   $("camLbl").textContent = "Watching for gestures";
   $("cam").classList.toggle("armed", gesturesOn);
   camNote("");
+  if (!handCal) startHandCheck();
   loop();
 }
 function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
@@ -384,6 +449,7 @@ function loop() {
   const hands = res.landmarks || [];
   const lm = hands[0];
   draw(hands);
+  if (calib) { handCheckFrame(hands.length === 1 ? lm : null, hands.length === 1 ? res.handedness?.[0]?.[0]?.categoryName : null, now); return; }
   if (gesturesOn && zoomOn() && hands.length === 2) {
     $("cam").classList.add("hot");
     history = []; handSince = 0; holdStart = 0; setMeter(0); pinchPrev = null;
@@ -401,7 +467,7 @@ function loop() {
   const y = pts.reduce((a, p) => a + p.y, 0) / pts.length;
   const label = res.handedness?.[0]?.[0]?.categoryName;
   const hand = whichHand(label);
-  const front = hand ? palmFacing(lm, label) : false;
+  const front = hand ? palmFacing(lm, hand) : false;
   history.push({ t: now, x, y, hand, front });
   $("camLbl").textContent = hand ? `${hand === "right" ? "Right" : "Left"} hand · ${front ? "palm" : "back"}` : "Hand seen";
   while (history.length && now - history[0].t > WINDOW_MS) history.shift();
