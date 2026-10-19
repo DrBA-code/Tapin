@@ -177,6 +177,7 @@
             <a class="btn small ghost" href="#qr/${p.code}" target="_blank" rel="noopener">QR poster</a>
             <a class="btn small ghost" href="throw/#${p.code}" target="_blank" rel="noopener">Throw console</a>
             <a class="btn small ghost" href="slides/" target="_blank" rel="noopener" data-present="${p.code}">Present slides</a>
+            <a class="btn small ghost" href="wheel/#${p.code}" target="_blank" rel="noopener">Spin the wheel</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
@@ -570,6 +571,7 @@
     $("rDisplay").href = "#display/" + rProg.code;
     $("rQr").href = "#qr/" + rProg.code;
     $("rThrow").href = "throw/#" + rProg.code;
+    $("rWheel").href = "wheel/#" + rProg.code;
     $("rBack").textContent = rRole === "organiser" ? "Back to programmes" : "Sign out";
     setStatusBtn();
     await loadRegister();

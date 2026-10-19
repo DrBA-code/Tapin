@@ -38,6 +38,9 @@
   .row button{flex:1;padding:16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:16px;font-weight:600;cursor:pointer}
   .row button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
   .hint{font-size:13px;color:var(--muted);text-align:center;margin:0}
+  .ask{background:#3a2c0c;border:1px solid var(--gold);border-radius:16px;padding:14px;display:grid;gap:8px;text-align:center}
+  .ask span{font-size:13px;color:var(--muted)}
+  .ask #keep{background:var(--gold);color:#1b1205;border:0}
   /* code entry */
   .join{flex:1;display:grid;align-content:center;gap:14px;text-align:center}
   .join input{font-family:var(--mono);font-size:30px;letter-spacing:.3em;text-transform:uppercase;text-align:center;padding:16px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--fg);width:100%}
@@ -65,6 +68,11 @@
 
   <div id="remote" hidden style="display:contents">
     <div class="count" id="count"></div>
+    <div class="ask" id="ask" hidden>
+      <b id="askTxt"></b>
+      <span>Only you can see this.</span>
+      <div class="row"><button id="keep" type="button">Keep</button><button id="respin" type="button">Spin again</button></div>
+    </div>
     <div class="pad" id="pad">
       <button id="prev" type="button"><span>◀</span>Back<small>or swipe right</small></button>
       <button id="next" type="button"><span>▶</span>Next<small>or swipe left</small></button>
@@ -108,6 +116,14 @@
       heardBack = true;
       setStatus("on", "Connected · code " + code);
       if (payload && payload.total) $("count").textContent = `${payload.page} / ${payload.total}`;
+      if (payload && payload.app === "wheel") {
+        $("next").innerHTML = "<span>🎡</span>Spin<small>or swipe left</small>";
+        $("prev").innerHTML = "<span>✕</span>Close result<small>or swipe right</small>";
+        $("blank").hidden = true;
+        $("count").textContent = payload.spinning ? "Spinning…" : payload.chosen ? payload.chosen : "";
+        $("ask").hidden = !payload.prompt; $("askTxt").textContent = payload.prompt || "";
+        if (payload.prompt) buzz([60, 60, 60]);
+      }
       if (payload && typeof payload.blank === "boolean") { blanked = payload.blank; $("blank").setAttribute("aria-pressed", blanked); $("blank").textContent = blanked ? "Show slide" : "Pause screen"; }
     });
     channel.subscribe(status => {
@@ -130,6 +146,8 @@
   $("next").addEventListener("click", () => press("next", $("next")));
   $("prev").addEventListener("click", () => press("prev", $("prev")));
   $("blank").addEventListener("click", () => press("blank", $("blank")));
+  $("keep").addEventListener("click", () => { press("keep"); $("ask").hidden = true; });
+  $("respin").addEventListener("click", () => { press("respin"); $("ask").hidden = true; });
 
   // Swipe anywhere: left = next (like turning a page), right = back.
   let sx = 0, sy = 0, st = 0;

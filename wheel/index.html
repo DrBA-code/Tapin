@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Spin the Wheel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Projector stage: the wheel of check-in portraits fills the left; programme, controls and phone remote sit on the right. */
+  :root{
+    --stage:#0b1612; --stage-2:#12231d; --fg:#eef4ef; --muted:#8fa69b; --gold:#e8b44a; --green:#3fb98a; --line:#20372e;
+    --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif; --body:"Figtree",ui-sans-serif,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:radial-gradient(120% 90% at 30% 0%,var(--stage-2),var(--stage) 60%);color:var(--fg);font-family:var(--body);overflow:hidden}
+  [hidden]{display:none!important}
+  .stage{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;padding-block:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-bottom));padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+  @media (max-width:900px){.stage{grid-template-columns:1fr;overflow:auto;height:auto;min-height:100%}body{overflow:auto}}
+  .wheelbox{position:relative;display:grid;place-items:center;min-height:0}
+  canvas#wheel{width:min(100%,calc(100vh - 40px));aspect-ratio:1;max-width:100%;cursor:grab;touch-action:none}
+  .pointer{position:absolute;top:calc(50% - min(50%,(100vh - 40px)/2) - 6px);left:50%;transform:translateX(-50%);width:0;height:0;border-left:22px solid transparent;border-right:22px solid transparent;border-top:44px solid var(--gold);filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));z-index:2}
+  .side{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
+  .logos{display:inline-flex;gap:10px;align-items:center;background:#fff;border-radius:12px;padding:6px 10px;align-self:flex-start}
+  .logos img{height:44px;width:auto}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,2.4vw,34px);line-height:1.1;margin:4px 0 0;text-wrap:balance}
+  .meta{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .box{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px}
+  .box b.n{font-family:var(--display);font-size:30px;color:var(--gold);font-variant-numeric:tabular-nums}
+  .btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;font-size:15px;cursor:pointer;background:var(--green);color:#06140e}
+  .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+  .btn.small{padding:8px 12px;font-size:13px;font-weight:600}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  label.opt{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+  .qr{background:#fff;border-radius:10px;padding:6px;width:110px;height:110px;flex:none}
+  .qr svg{width:100%;height:100%;display:block}
+  .code{font-family:var(--mono);letter-spacing:.15em;font-size:16px}
+  .hint{font-size:13px;color:var(--muted);line-height:1.5}
+  #cam{width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;position:relative;background:#000;border:2px solid var(--line)}
+  #cam.hot{border-color:var(--gold)}
+  #cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  #cam span{position:absolute;left:8px;top:6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:6px}
+
+  /* result */
+  #result{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:rgba(6,12,10,.88);backdrop-filter:blur(6px);text-align:center}
+  #result .card{display:grid;justify-items:center;gap:16px;padding:24px}
+  #rPic{width:min(44vh,70vw);height:min(44vh,70vw);border-radius:50%;object-fit:cover;border:6px solid var(--gold);box-shadow:0 0 90px rgba(232,180,74,.4);background:var(--line);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:12vh;color:var(--muted)}
+  #rOver{font-family:var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-size:clamp(14px,1.6vw,20px)}
+  #rName{font-family:var(--display);font-weight:800;font-size:clamp(36px,6vw,90px);line-height:1}
+  #rMda{color:var(--muted);font-size:clamp(16px,2vw,26px)}
+  #result.in #rPic{animation:pop .8s cubic-bezier(.2,.9,.25,1.2) both}
+  #result.in #rOver,#result.in #rName,#result.in #rMda{animation:rise .6s .3s both}
+  @keyframes pop{from{transform:scale(.3);opacity:0}to{transform:none;opacity:1}}
+  @keyframes rise{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+  /* discreet prompt for the facilitator when the wheel lands on someone picked before */
+  #again{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:12;background:rgba(15,25,21,.95);border:1px solid var(--line);border-radius:14px;padding:12px 14px;max-width:320px;font-size:13px;display:grid;gap:8px}
+  .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px}
+  .empty h2{color:var(--fg);font-family:var(--display);font-size:30px;margin:0 0 8px}
+  .lock{max-width:420px;margin:12vh auto;display:grid;gap:12px;text-align:center}
+  .lock input{padding:14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--fg);font-size:17px}
+  .err{color:#f2786f;font-size:14px;min-height:1.2em}
+  @media (prefers-reduced-motion:reduce){#result.in *{animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="lock" id="lock" hidden>
+  <div class="eyebrow">Spin the wheel</div>
+  <h1 id="lockTitle">Sign in</h1>
+  <p class="hint">Open the wheel from your programme on the menu, or enter the organiser or coordinator PIN.</p>
+  <form id="pinForm" style="display:grid;gap:10px"><input type="password" id="pin" placeholder="PIN" aria-label="PIN"><button class="btn" type="submit">Open the wheel</button></form>
+  <div class="err" id="pinErr"></div>
+</div>
+
+<div class="stage" id="stage" hidden>
+  <div class="wheelbox">
+    <div class="pointer" aria-hidden="true"></div>
+    <canvas id="wheel" width="1400" height="1400" aria-label="Wheel of participants"></canvas>
+    <div class="empty" id="empty" hidden><div><h2>Waiting for check-ins</h2>People appear on the wheel as they check in.</div></div>
+  </div>
+  <aside class="side">
+    <div class="logos" id="logos">
+      <img src="../assets/pssdc-logo.png" alt="PSSDC" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+      <img src="../assets/lagos-logo.png" alt="Lagos State Government" onerror="var p=this.parentNode;this.remove();if(p&&!p.querySelector('img'))p.remove()">
+    </div>
+    <div><div class="eyebrow">Spin the wheel</div><h1 id="title">…</h1><div class="meta" id="meta"></div></div>
+    <div class="box">
+      <div class="row" style="justify-content:space-between"><span><b class="n" id="nOn">0</b> on the wheel</span><span class="meta" id="nPicked">0 picked</span></div>
+      <button class="btn" id="spinBtn" type="button">Spin (Space)</button>
+      <label class="opt"><input type="checkbox" id="optOut"> Include people who tapped out</label>
+      <label class="opt"><input type="checkbox" id="optSound" checked> Sound</label>
+      <button class="btn ghost small" id="resetPicks" type="button">Clear "picked before" marks</button>
+    </div>
+    <div class="box">
+      <div class="row" style="justify-content:space-between"><b>Hand control</b><button class="btn ghost small" id="camBtn" type="button">Turn on camera</button></div>
+      <div id="cam" hidden><video id="video" playsinline muted autoplay></video><span id="camLbl">Starting…</span></div>
+      <p class="hint" style="margin:0">Swipe your hand across to spin: the faster the swipe, the bigger the spin. Thumbs up keeps a "picked before" choice.</p>
+    </div>
+    <div class="box">
+      <b>Phone remote</b>
+      <div class="row"><div class="qr" id="qr"></div><div class="hint">Scan to spin from your phone. If the wheel lands on someone picked before, your phone asks you privately: keep or spin again.<br><span class="code" id="rcode"></span></div></div>
+    </div>
+  </aside>
+</div>
+
+<div id="result" hidden>
+  <div class="card"><div id="rPicWrap"></div><div id="rOver">Over to you</div><div id="rName"></div><div id="rMda"></div><button class="btn ghost" id="rClose" type="button" style="margin-top:8px">Back to the wheel (Space)</button></div>
+</div>
+
+<div id="again" hidden>
+  <b id="againTxt"></b>
+  <span class="hint" style="margin:0">Only you see this. 👍 or K keeps them, a swipe or R spins again.</span>
+  <div class="row"><button class="btn small" id="keepBtn" type="button">Keep</button><button class="btn ghost small" id="respinBtn" type="button">Spin again</button></div>
+</div>
+
+<script src="../config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const cfg = window.TAPIN_CONFIG || {};
+const sb = window.supabase && cfg.SUPABASE_URL ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+const code = location.hash.replace("#", "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const fullName = e => (e.title === "Miss" ? "Miss " : e.title ? e.title + ". " : "") + e.name;
+const firstName = e => (e.name || "").split(/\s+/)[0];
+const initials = n => (n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+const ss = { get(k) { try { return sessionStorage.getItem(k); } catch { return null; } } };
+const ls = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+let prog = null, people = [], all = [], picked = new Set(ls.get("wheel_picked_" + code) || []);
+const imgs = new Map();
+
+// ---------------- access ----------------
+async function check(p) { const { data } = await sb.rpc("coordinator_check", { p_code: code, p_pin: p }); return data || null; }
+async function boot() {
+  if (!sb || !code) { $("lock").hidden = false; $("lockTitle").textContent = "Open the wheel from your programme on the menu."; $("pinForm").hidden = true; return; }
+  const { data } = await sb.from("programmes").select("*").eq("code", code).maybeSingle();
+  prog = data;
+  if (!prog) { $("lock").hidden = false; $("lockTitle").textContent = "Programme not found"; $("pinForm").hidden = true; return; }
+  const room = ls.get("airswipe_room");
+  for (const p of [ss.get("tapin_pin"), ss.get("tapin_cpin_" + code), room && room.code === code ? room.pin : null].filter(Boolean)) {
+    if (await check(p)) return open();
+  }
+  $("lock").hidden = false; $("lockTitle").textContent = prog.name;
+}
+$("pinForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (await check($("pin").value)) { $("lock").hidden = true; open(); } else $("pinErr").textContent = "That PIN is wrong for this programme.";
+});
+
+async function open() {
+  $("stage").hidden = false;
+  $("title").textContent = prog.name;
+  $("meta").textContent = [prog.programme_code, new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })].filter(Boolean).join(" · ");
+  await loadPeople();
+  sb.channel("wheel-" + prog.id).on("postgres_changes", { event: "*", schema: "public", table: "checkins", filter: `programme_id=eq.${prog.id}` }, () => loadPeople()).subscribe();
+  setupRemote();
+  keepAwake();
+  requestAnimationFrame(frame);
+}
+async function loadPeople() {
+  const { data } = await sb.from("checkins").select("id,title,name,mda,photo_url,tap_out_at,arrived_at").eq("programme_id", prog.id).order("arrived_at");
+  all = data || [];
+  refreshPeople();
+}
+function refreshPeople() {
+  people = all.filter(p => $("optOut").checked || !p.tap_out_at);
+  people.forEach(p => {
+    if (p.photo_url && !imgs.has(p.id)) { const i = new Image(); i.onload = () => { needDraw = true; }; i.src = p.photo_url; imgs.set(p.id, i); }
+  });
+  $("nOn").textContent = people.length;
+  $("nPicked").textContent = `${people.filter(p => picked.has(p.id)).length} picked`;
+  $("empty").hidden = people.length > 0;
+  needDraw = true;
+}
+$("optOut").addEventListener("change", refreshPeople);
+$("resetPicks").addEventListener("click", () => { picked = new Set(); ls.set("wheel_picked_" + code, []); refreshPeople(); });
+
+// ---------------- wheel drawing ----------------
+const cv = $("wheel"), ctx = cv.getContext("2d");
+const COLORS = ["#0f6b4f", "#145c46", "#1d7a5b", "#11513e", "#23866a", "#0d4a37"];
+let angle = 0, vel = 0, spinning = false, needDraw = true, lastT = 0, lastSeg = -1;
+function draw() {
+  const W = cv.width, R = W / 2 - 20, cx = W / 2, cy = W / 2;
+  ctx.clearRect(0, 0, W, W);
+  const n = people.length;
+  if (!n) return;
+  const seg = (Math.PI * 2) / n;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+  for (let i = 0; i < n; i++) {
+    const p = people[i], a0 = i * seg - Math.PI / 2 - seg / 2;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, a0, a0 + seg); ctx.closePath();
+    ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 2; ctx.stroke();
+    // portrait + name along the slice
+    ctx.save(); ctx.rotate(a0 + seg / 2);
+    const pr = Math.max(18, Math.min(70, R * seg * 0.38)), px = R - pr - 26;
+    const im = imgs.get(p.id);
+    ctx.save(); ctx.beginPath(); ctx.arc(px, 0, pr, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    if (im && im.complete && im.naturalWidth) { ctx.rotate(Math.PI / 2); ctx.drawImage(im, -pr, -px - pr, pr * 2, pr * 2); }
+    else { ctx.fillStyle = "#20372e"; ctx.fill(); ctx.rotate(Math.PI / 2); ctx.fillStyle = "#cfe0d7"; ctx.font = `800 ${pr * 0.8}px "Bricolage Grotesque", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(initials(p.name), 0, -px); }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(px, 0, pr, 0, Math.PI * 2);
+    ctx.lineWidth = picked.has(p.id) ? 7 : 3; ctx.strokeStyle = picked.has(p.id) ? "#e8b44a" : "rgba(255,255,255,.7)"; ctx.stroke();
+    if (n <= 40) {
+      ctx.fillStyle = "#eef4ef"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.font = `600 ${Math.max(16, Math.min(34, R * seg * 0.22))}px Figtree, sans-serif`;
+      ctx.fillText(firstName(p).slice(0, 14), px - pr - 14, 0);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  // hub
+  ctx.beginPath(); ctx.arc(cx, cy, 70, 0, Math.PI * 2); ctx.fillStyle = "#0b1612"; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = "#e8b44a"; ctx.stroke();
+  ctx.fillStyle = "#e8b44a"; ctx.font = `800 30px "Bricolage Grotesque", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("SPIN", cx, cy);
+}
+// index of the slice under the pointer (top)
+function pointerIndex() {
+  const n = people.length, seg = (Math.PI * 2) / n;
+  let a = (-angle) % (Math.PI * 2); if (a < 0) a += Math.PI * 2;
+  return Math.round(a / seg) % n;
+}
+function frame(t) {
+  const dt = Math.min(0.05, (t - (lastT || t)) / 1000); lastT = t;
+  if (spinning) {
+    angle += vel * dt;
+    vel *= Math.exp(-0.55 * dt) ; vel -= Math.sign(vel) * 0.35 * dt;   // friction: long glide, then a gentle stop
+    const seg = pointerIndex();
+    if (seg !== lastSeg) { lastSeg = seg; tick(Math.abs(vel)); }
+    if (Math.abs(vel) < 0.08) { spinning = false; vel = 0; landed(); }
+    needDraw = true;
+  }
+  if (needDraw) { draw(); needDraw = false; }
+  requestAnimationFrame(frame);
+}
+
+// ---------------- spinning ----------------
+let pendingAgain = null, resultShowing = false;
+function spin(power = 1, dir = 1) {
+  if (spinning || people.length < 2) return;
+  if (resultShowing) closeResult();
+  hideAgain();
+  unlockAudio();
+  vel = dir * (7 + Math.min(1.6, power) * 9 + Math.random() * 3);
+  spinning = true; lastSeg = -1;
+  sendState();
+}
+function landed() {
+  const p = people[pointerIndex()];
+  if (!p) return;
+  if (picked.has(p.id)) { pendingAgain = p; showAgain(p); return; }
+  choose(p);
+}
+function choose(p) {
+  pendingAgain = null; hideAgain();
+  picked.add(p.id); ls.set("wheel_picked_" + code, [...picked]);
+  refreshPeople();
+  const wrap = $("rPicWrap");
+  wrap.innerHTML = p.photo_url ? `<img id="rPic" src="${p.photo_url}" alt="">` : `<div id="rPic">${initials(p.name)}</div>`;
+  $("rName").textContent = fullName(p); $("rMda").textContent = p.mda || "";
+  const r = $("result"); r.hidden = false; r.classList.remove("in"); void r.offsetWidth; r.classList.add("in");
+  resultShowing = true; fanfare(); sendState();
+}
+function closeResult() { $("result").hidden = true; resultShowing = false; sendState(); }
+function showAgain(p) { $("againTxt").textContent = `${fullName(p)} was picked before.`; $("again").hidden = false; sendState(); }
+function hideAgain() { $("again").hidden = true; }
+$("keepBtn").addEventListener("click", () => pendingAgain && choose(pendingAgain));
+$("respinBtn").addEventListener("click", () => { pendingAgain = null; spin(1, 1); });
+$("spinBtn").addEventListener("click", () => spin(1, 1));
+$("rClose").addEventListener("click", closeResult);
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); resultShowing ? closeResult() : pendingAgain ? (pendingAgain = null, spin(1, 1)) : spin(1, 1); }
+  if ((e.key === "k" || e.key === "K") && pendingAgain) choose(pendingAgain);
+  if ((e.key === "r" || e.key === "R") && pendingAgain) { pendingAgain = null; spin(1, 1); }
+  if (e.key === "Escape" && resultShowing) closeResult();
+  if (e.key === "f" || e.key === "F") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {});
+});
+// drag / flick the wheel with mouse or finger
+let drag = null;
+cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+addEventListener("pointerup", e => {
+  if (!drag) return;
+  const d = Math.hypot(e.clientX - drag.x, e.clientY - drag.y), dt = Math.max(60, performance.now() - drag.t);
+  spin(d < 10 ? 1 : Math.min(2, d / dt), e.clientX >= drag.x ? 1 : -1); drag = null;
+});
+
+// ---------------- sound ----------------
+let actx = null;
+function unlockAudio() { try { const AC = window.AudioContext || window.webkitAudioContext; actx = actx || new AC(); if (actx.state === "suspended") actx.resume(); } catch {} }
+function tick(speed) {
+  if (!actx || !$("optSound").checked) return;
+  const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+  o.type = "square"; o.frequency.value = 1500 + Math.min(600, speed * 40);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.04);
+}
+function fanfare() {
+  if (!actx || !$("optSound").checked) return;
+  const t = actx.currentTime;
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+    const o = actx.createOscillator(), g = actx.createGain(); o.type = "triangle"; o.frequency.value = f;
+    const s = t + i * 0.11; g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(0.25, s + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, s + (i === 3 ? 0.9 : 0.25));
+    o.connect(g).connect(actx.destination); o.start(s); o.stop(s + 1);
+  });
+}
+document.addEventListener("pointerdown", unlockAudio);
+
+// ---------------- hand control (webcam) ----------------
+let stream = null, recognizer = null, hist = [], cooldown = 0, lastVT = -1;
+$("camBtn").addEventListener("click", async () => {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; $("cam").hidden = true; $("camBtn").textContent = "Turn on camera"; return; }
+  unlockAudio();
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false }); }
+  catch { $("camBtn").textContent = "Camera blocked"; return; }
+  $("cam").hidden = false; $("camBtn").textContent = "Turn off camera";
+  const v = $("video"); v.srcObject = stream; await v.play().catch(() => {});
+  if (!recognizer) {
+    $("camLbl").textContent = "Loading hand tracking…";
+    const { FilesetResolver, GestureRecognizer } = await import("../slides/vendor/vision_bundle.mjs");
+    const fs = await FilesetResolver.forVisionTasks(new URL("../slides/vendor/mediapipe-wasm", location.href).href);
+    const opts = d => ({ baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task", delegate: d }, runningMode: "VIDEO", numHands: 1 });
+    try { recognizer = await GestureRecognizer.createFromOptions(fs, opts("GPU")); } catch { recognizer = await GestureRecognizer.createFromOptions(fs, opts("CPU")); }
+  }
+  $("camLbl").textContent = "Swipe to spin";
+  handLoop();
+});
+function handLoop() {
+  if (!stream) return;
+  requestAnimationFrame(handLoop);
+  const v = $("video"), now = performance.now();
+  if (v.readyState < 2 || v.currentTime === lastVT) return;
+  lastVT = v.currentTime;
+  let res; try { res = recognizer.recognizeForVideo(v, now); } catch { return; }
+  const lm = res.landmarks?.[0];
+  $("cam").classList.toggle("hot", !!lm);
+  if (!lm) { hist = []; return; }
+  const g = res.gestures?.[0]?.[0];
+  if (pendingAgain && g && g.categoryName === "Thumb_Up" && g.score > 0.6 && now > cooldown) { choose(pendingAgain); cooldown = now + 1200; return; }
+  const x = (lm[0].x + lm[9].x) / 2;
+  hist.push({ t: now, x }); hist = hist.filter(h => now - h.t < 350);
+  if (now < cooldown || hist.length < 3) return;
+  const dx = x - hist[0].x, dt = (now - hist[0].t) / 1000;
+  if (Math.abs(dx) > 0.22) {
+    const speed = Math.abs(dx) / Math.max(0.08, dt);         // share of the picture per second
+    if (resultShowing) closeResult();
+    if (pendingAgain) pendingAgain = null;
+    spin(Math.min(2, speed / 1.6), dx > 0 ? -1 : 1);          // picture isn't mirrored: spin the way the hand moved
+    hist = []; cooldown = now + 1500;
+  }
+}
+
+// ---------------- phone remote ----------------
+let remote = null;
+function setupRemote() {
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let rc = ss.get("wheel_remote_" + code);
+  if (!rc) { rc = Array.from({ length: 6 }, () => A[Math.floor(Math.random() * A.length)]).join(""); try { sessionStorage.setItem("wheel_remote_" + code, rc); } catch {} }
+  const link = new URL("../remote/", location.href).href + "#" + rc;
+  if (window.qrcode) { const q = window.qrcode(0, "M"); q.addData(link); q.make(); $("qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
+  $("rcode").textContent = rc;
+  remote = sb.channel("remote-" + rc, { config: { broadcast: { self: false } } });
+  remote.on("broadcast", { event: "cmd" }, ({ payload }) => {
+    const c = payload && payload.cmd;
+    if (c === "next" || c === "respin") { if (resultShowing) closeResult(); pendingAgain = null; spin(1, 1); }
+    else if (c === "keep" && pendingAgain) choose(pendingAgain);
+    else if (c === "prev" && resultShowing) closeResult();
+    sendState();
+  });
+  remote.subscribe();
+}
+function sendState() {
+  remote?.send({ type: "broadcast", event: "state", payload: { app: "wheel", spinning, prompt: pendingAgain ? `${fullName(pendingAgain)} was picked before.` : "", chosen: resultShowing ? $("rName").textContent : "" } });
+}
+
+let wakeLock = null;
+async function keepAwake() { try { if (!wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch {} }
+
+boot();
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@ Entrance check-in and big-screen welcome for PSSDC training programmes. Feature 
 - **Hand check:** both apps learn once per computer which hand the webcam reports as right, and which way a palm faces ("Check my hands").
 - **Throw** (`/throw/#CODE` for the facilitator, `/room/#CODE` for participants): the facilitator throws slides, case studies, links and their contact card (phone + follow links, as a .vcf) to everyone or to Group A / B; cards fly onto participants' phones and are swiped down into *My items*. Participants can send their contact back; the facilitator gets an alert and saves it. Requires `supabase/upgrade-4-throw.sql`.
 - **Grab and throw** (Air Swipe Slides → step 4): connect to a programme with its link code and PIN; a fist grabs the slide and an open hand throws it to the room (each slide once). Items ticked *Ready for hand throw* in the Throw console go instead, once. Requires `supabase/upgrade-5-hand-throw.sql`.
+- **Spin the wheel** (`/wheel/#CODE`): a wheel of the programme's check-in portraits on the projector. Spin with a hand swipe (faster swipe, bigger spin), Space, a flick, or the phone remote. Everyone stays on the wheel; people picked before get a gold ring, and if the wheel lands on one, only the facilitator is asked (phone remote or a corner note): keep (👍 / K) or spin again (swipe / R).
 - **Logos:** add `assets/pssdc-logo.png` and `assets/lagos-logo.png`; they show at the top left of every screen.
 
 Static site (no build step) hosted on Vercel; data and photos in Supabase.
