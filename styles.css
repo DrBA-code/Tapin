@@ -209,3 +209,16 @@ p.small{margin:0}
 .stars button{font-size:42px;line-height:1;background:none;border:0;cursor:pointer;color:var(--line);padding:2px}
 .stars button.on{color:var(--gold)}
 .ok{color:var(--accent);font-weight:600}
+
+/* Certificate name hint, email, delete and bin */
+.hintline{font-weight:400;font-size:13px;color:var(--muted)}
+.certprev{display:flex;flex-direction:column;gap:2px;border:1px dashed var(--accent);border-radius:12px;padding:10px 14px;background:var(--surface)}
+.certprev span{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.certprev b{font-family:var(--display);font-size:22px}
+input[type=email]{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:17px}
+.btn.dangerous{color:var(--danger)}
+.confirm input{flex:1;min-width:160px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.bin summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:18px}
+.binlist{display:grid;gap:8px}
+.binrow{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.binrow b{display:block}

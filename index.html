@@ -65,6 +65,7 @@
       </div>
       <div class="listhead"><h2>Programmes</h2><button class="btn ghost small" id="signOut" type="button">Sign out</button></div>
       <div id="progList" class="proglist"></div>
+      <details class="panel bin" id="binBox" hidden><summary>🗑️ Bin <span class="muted small" id="binN"></span></summary><p class="muted small">Deleted programmes stay here for 30 days, then they are removed for good with their check-ins, answers and results. A restored programme comes back closed; reopen it when you're ready.</p><div id="binList" class="binlist"></div></details>
     </div>
   </div>
 </section>
@@ -89,8 +90,10 @@
         <div class="f" role="group" aria-labelledby="tLbl"><span id="tLbl">Title</span>
           <div class="titles" id="titles"></div>
         </div>
-        <label class="f" for="fName">Full name<input type="text" id="fName" autocomplete="name" placeholder="e.g. Babajide Arulogun"></label>
+        <label class="f" for="fName">Full name<span class="hintline">Write it exactly as you want it on your certificate.</span><input type="text" id="fName" autocomplete="name" placeholder="e.g. Babajide Arulogun"></label>
+        <div class="certprev" id="certPrev" hidden><span>On your certificate</span><b id="certName"></b></div>
         <label class="f" for="fMda">MDA<input type="text" id="fMda" list="mdaList" autocomplete="organization" placeholder="Ministry, Department or Agency"></label>
+        <label class="f" for="fEmail">Email<span class="hintline">Your certificate and results will be sent here.</span><input type="email" id="fEmail" autocomplete="email" inputmode="email" placeholder="e.g. you@lagosstate.gov.ng"></label>
         <datalist id="mdaList">
           <option value="Public Service Staff Development Centre (PSSDC)"><option value="Civil Service Commission"><option value="Office of Establishments and Training"><option value="Ministry of Establishments and Training"><option value="Ministry of Education"><option value="Ministry of Health"><option value="Ministry of Finance"><option value="Ministry of Economic Planning and Budget"><option value="Ministry of Science and Technology"><option value="Office of the Head of Service"><option value="Teaching Service Commission (TESCOM)">
         </datalist>
@@ -203,8 +206,10 @@
         <a class="btn ghost" id="rWheel" target="_blank" rel="noopener">Spin the wheel</a>
         <a class="btn ghost" id="rAssess" target="_blank" rel="noopener">Assessments</a>
         <button class="btn ghost" id="rStatus" type="button"></button>
+        <button class="btn ghost dangerous" id="rDelete" type="button">Delete programme</button>
         <a class="btn ghost" id="rBack" href="#">Menu</a>
       </div>
+      <form class="confirm" id="rDelForm" hidden novalidate><span>Type the programme name to delete it: <b id="rDelName"></b></span><input type="text" id="rDelInput" autocomplete="off" aria-label="Programme name"><button class="btn danger small" type="submit">Delete</button><button class="btn ghost small" type="button" id="rDelCancel">Cancel</button></form>
       <div class="err" id="rMsg" role="status"></div>
       <div class="tablewrap"><table class="reg" id="rTable"></table></div>
     </div>

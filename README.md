@@ -22,7 +22,7 @@ Static site (no build step) hosted on Vercel; data and photos in Supabase.
 
 ## Setup
 
-1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it. Then run `supabase/upgrade-2-programmes.sql`, `upgrade-3-coordinators.sql`, `upgrade-4-throw.sql`, `upgrade-5-hand-throw.sql` and `upgrade-6-assess.sql` the same way, in that order.
+1. **Database:** open Supabase → SQL Editor → New query, paste `supabase/setup.sql`, change the organiser PIN on the marked line, and run it. Then run `supabase/upgrade-2-programmes.sql`, `upgrade-3-coordinators.sql`, `upgrade-4-throw.sql`, `upgrade-5-hand-throw.sql`, `upgrade-6-assess.sql` and `upgrade-7-email-bin.sql` the same way, in that order.
 2. **Key:** put the project's *anon public* key in `config.js` (Supabase → Project Settings → API). Never use the `service_role` key.
 3. **Hosting:** Vercel deploys automatically from the `main` branch. Framework preset: *Other*; no build command.
 

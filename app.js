@@ -63,7 +63,7 @@
   async function getProgramme(code) {
     if (!sb || !code) return null;
     const { data } = await sb.from("programmes").select("*").eq("code", code).maybeSingle();
-    return data || null;
+    return data && !data.deleted_at ? data : null;
   }
 
   // =====================================================================
@@ -155,11 +155,12 @@
   function loadProgrammes() { clearTimeout(progLoadTimer); progLoadTimer = setTimeout(doLoadProgrammes, 150); }
   async function doLoadProgrammes() {
     const [{ data: progs }, { data: rows }] = await Promise.all([
-      sb.from("programmes").select("*").order("created_at", { ascending: false }),
+      sb.from("programmes").select("*").order("created_at", { ascending: false }).then(r => ({ ...r, data: (r.data || []).filter(p => !p.deleted_at) })),
       sb.from("checkins").select("programme_id,tap_out_at").not("programme_id", "is", null).limit(10000)
     ]);
     const counts = {};
     (rows || []).forEach(r => { const c = (counts[r.programme_id] ||= { in: 0, out: 0 }); c.in++; if (r.tap_out_at) c.out++; });
+    loadBin();
     const list = $("progList");
     if (!progs || !progs.length) { list.innerHTML = `<p class="muted">No programmes yet. Create your first portal above.</p>`; showNewPanel(true); return; }
     list.innerHTML = progs.map(p => {
@@ -183,7 +184,9 @@
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
             <button class="btn small ghost" data-act="${p.status === "open" ? "close" : "reopen"}" type="button">${p.status === "open" ? "Close programme" : "Reopen"}</button>
+            <button class="btn small ghost dangerous" data-act="delete" type="button">Delete</button>
           </div>
+          <form class="confirm delform" hidden novalidate><span>Type <b>${esc(p.name)}</b> to move it to the Bin.</span><input type="text" name="confirmname" autocomplete="off" aria-label="Programme name"><button class="btn danger small" type="submit">Delete</button><button class="btn small ghost" data-act="nodelete" type="button">Cancel</button></form>
           <form class="edit" hidden novalidate>
             <label class="f">Programme name<input type="text" name="name" value="${esc(p.name)}"></label>
             <label class="f">Programme code<input type="text" name="pcode" value="${esc(p.programme_code)}"></label>
@@ -217,6 +220,8 @@
       try { await navigator.clipboard.writeText(link); msg.textContent = "Coordinator link copied. Send it with their PIN."; }
       catch { msg.textContent = link; }
     }
+    if (act === "delete") { card.querySelector(".delform").hidden = false; card.querySelector(".delform input").focus(); }
+    if (act === "nodelete") card.querySelector(".delform").hidden = true;
     if (act === "edit") card.querySelector(".edit").hidden = false;
     if (act === "cancel") card.querySelector(".edit").hidden = true;
     if (act === "close" || act === "reopen") {
@@ -229,6 +234,13 @@
   $("progList").addEventListener("submit", async e => {
     e.preventDefault();
     const f = e.target, card = f.closest(".prog"), msg = card.querySelector(".err");
+    if (f.classList.contains("delform")) {
+      const name = card.querySelector("h3").textContent.trim();
+      if (f.confirmname.value.trim().toLowerCase() !== name.toLowerCase()) return (msg.textContent = "The name doesn't match. Type it exactly to delete.");
+      const { error } = await sb.rpc("delete_programme", { p_pin: pin(), p_id: card.dataset.id });
+      if (error) return (msg.textContent = /Could not find the function|schema cache/i.test(error.message || "") ? "Run upgrade-7-email-bin.sql in Supabase first." : "Couldn't delete.");
+      loadProgrammes(); return;
+    }
     const { error } = await sb.rpc("update_programme", { p_pin: pin(), p_id: card.dataset.id, p_name: f.name.value, p_programme_code: f.pcode.value, p_coordinator: f.coord.value });
     if (error) return (msg.textContent = "Couldn't save the changes.");
     const np = f.cpin.value.trim();
@@ -238,6 +250,27 @@
       if (r.error) return (msg.textContent = "Details saved, but the coordinator PIN couldn't be changed.");
     }
     msg.textContent = np ? "Saved, including the new coordinator PIN." : "Saved.";
+    loadProgrammes();
+  });
+
+
+  // ---- Bin: deleted programmes (organiser) ----
+  async function loadBin() {
+    const { data, error } = await sb.rpc("list_bin", { p_pin: pin() });
+    if (error || !data) { $("binBox").hidden = true; return; }
+    $("binBox").hidden = !data.length; $("binN").textContent = data.length ? `(${data.length})` : "";
+    $("binList").innerHTML = data.map(p => {
+      const left = Math.max(0, 30 - Math.floor((Date.now() - new Date(p.deleted_at)) / 864e5));
+      return `<div class="binrow" data-id="${esc(p.id)}"><div><b>${esc(p.name)}</b><span class="muted small">${esc(p.programme_code || "")} · deleted ${fmtDate(p.deleted_at)} · removed for good in ${left} day${left === 1 ? "" : "s"}</span></div>
+        <div class="row"><button class="btn small" data-bin="restore" type="button">Restore</button><button class="btn small ghost dangerous" data-bin="purge" type="button">Delete for good</button></div></div>`;
+    }).join("");
+  }
+  $("binList").addEventListener("click", async e => {
+    const b = e.target.closest("button[data-bin]"); if (!b) return;
+    const id = b.closest(".binrow").dataset.id;
+    if (b.dataset.bin === "purge" && b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Tap again: this can't be undone"; return; }
+    const { error } = await sb.rpc(b.dataset.bin === "restore" ? "restore_programme" : "purge_programme", { p_pin: pin(), p_id: id });
+    if (error) { b.textContent = "Couldn't do that"; return; }
     loadProgrammes();
   });
 
@@ -329,6 +362,15 @@
 
   TITLES.forEach(t => $("titles").insertAdjacentHTML("beforeend", `<input type="radio" name="title" id="t_${t}" value="${t}"><label for="t_${t}">${t}</label>`));
 
+  function certPreview() {
+    const title = document.querySelector('input[name="title"]:checked')?.value || "";
+    const name = $("fName").value.trim().replace(/\s+/g, " ");
+    $("certPrev").hidden = name.length < 3;
+    $("certName").textContent = fullName({ title, name });
+  }
+  $("fName").addEventListener("input", certPreview);
+  $("titles").addEventListener("change", certPreview);
+
   $("ciForm").addEventListener("submit", async e => {
     e.preventDefault();
     const err = $("ciErr");
@@ -338,6 +380,8 @@
     if (!title) return (err.textContent = "Choose your title.");
     if (name.length < 3) return (err.textContent = "Enter your full name.");
     if (mda.length < 2) return (err.textContent = "Enter your MDA.");
+    const email = $("fEmail").value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return (err.textContent = "Enter a valid email address.");
     if (!$("fConsent").checked) return (err.textContent = "Tick the box to agree to your photo being shown.");
     if (!sb || !kProg) return (err.textContent = "Check-in isn't connected. Ask the organiser.");
     const canvas = snapFromVideo(480) || fallbackPhoto;
@@ -354,7 +398,9 @@
       const photo_url = sb.storage.from("photos").getPublicUrl(path).data.publicUrl;
       const ins = await sb.from("checkins").insert({ id, programme_id: kProg.id, title, name, mda, photo_url });
       if (ins.error) throw ins.error;
-      store.set("tapin_mine_" + kProg.code, { id, title, name, photo_url, arrived_at: new Date().toISOString() });
+      const em = await sb.rpc("set_checkin_email", { p_checkin: id, p_email: email });
+      if (em.error) console.warn("Email not saved (run upgrade-7-email-bin.sql):", em.error.message);
+      store.set("tapin_mine_" + kProg.code, { id, title, name, mda, email, photo_url, arrived_at: new Date().toISOString() });
       showDone("in", { title, name }, canvas.toDataURL("image/jpeg", 0.8));
     } catch (x) {
       console.error(x);
@@ -444,7 +490,7 @@
   function resetKiosk() {
     clearTimeout(doneTimer);
     $("fbForm").hidden = true; $("fbThanks").hidden = true; fbFor = null;
-    $("ciForm").reset(); fallbackPhoto = null; $("still").hidden = true; $("ciErr").textContent = "";
+    $("ciForm").reset(); $("certPrev").hidden = true; fallbackPhoto = null; $("still").hidden = true; $("ciErr").textContent = "";
     if (!$("kiosk").hidden && !$("kMain").hidden) setTab("in");
   }
   $("nextBtn").addEventListener("click", resetKiosk);
@@ -624,11 +670,24 @@
     if (error) { $("rMsg").textContent = "Couldn't change the status."; return; }
     rProg.status = closing ? "closed" : "open"; $("rMsg").textContent = closing ? "Programme closed." : "Programme reopened."; setStatusBtn();
   });
+  $("rDelete").addEventListener("click", () => { $("rDelName").textContent = rProg.name; $("rDelInput").value = ""; $("rDelForm").hidden = false; $("rDelInput").focus(); });
+  $("rDelCancel").addEventListener("click", () => ($("rDelForm").hidden = true));
+  $("rDelForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    if ($("rDelInput").value.trim().toLowerCase() !== rProg.name.toLowerCase()) return ($("rMsg").textContent = "The name doesn't match. Type it exactly to delete.");
+    const { error } = await sb.rpc("delete_programme", { p_pin: rPin, p_id: rProg.id });
+    if (error) return ($("rMsg").textContent = /Could not find the function|schema cache/i.test(error.message || "") ? "Run upgrade-7-email-bin.sql in Supabase first." : "Couldn't delete.");
+    if (rRole === "coordinator") session.del("tapin_cpin_" + rProg.code);
+    location.hash = "#home";
+  });
   $("rBack").addEventListener("click", () => { if (rRole === "coordinator" && rProg) session.del("tapin_cpin_" + rProg.code); });
   async function loadRegister() {
     const { data } = await sb.from("checkins").select("id,title,name,mda,photo_url,arrived_at,tap_out_at")
       .eq("programme_id", rProg.id).order("arrived_at", { ascending: true }).limit(5000);
     rRows = data || [];
+    const em = await sb.rpc("list_emails", { p_pin: rPin, p_programme: rProg.id });
+    const emails = new Map((em.data || []).map(x => [x.checkin_id, x.email]));
+    rRows.forEach(r => (r.email = emails.get(r.id) || ""));
     const out = rRows.filter(r => r.tap_out_at);
     const mins = out.map(r => (new Date(r.tap_out_at) - new Date(r.arrived_at)) / 60000);
     const avg = mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null;
@@ -637,17 +696,17 @@
       ["Checked in", rRows.length], ["Tapped out", out.length], ["Still in", rRows.length - out.length],
       ["Average time", avg == null ? "—" : `${Math.floor(avg / 60)}h ${String(avg % 60).padStart(2, "0")}m`]
     ].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
-    $("rTable").innerHTML = `<thead><tr><th>S/N</th><th>Photo</th><th>Title</th><th>Name</th><th>MDA</th><th>Date</th><th>Time in</th><th>Time out</th><th>Duration</th></tr></thead><tbody>` +
-      (rRows.length ? rRows.map((r, i) => `<tr><td class="n">${i + 1}</td><td>${r.photo_url ? `<a href="${esc(r.photo_url)}" target="_blank" rel="noopener"><img src="${esc(r.photo_url)}" alt="" loading="lazy"></a>` : ""}</td><td>${esc(r.title)}</td><td>${esc(r.name)}</td><td>${esc(r.mda)}</td><td class="n">${fmtDate(r.arrived_at)}</td><td class="n">${fmtTime(r.arrived_at)}</td><td class="n">${fmtTime(r.tap_out_at) || "—"}</td><td class="n">${fmtDur(r.arrived_at, r.tap_out_at) || "—"}</td></tr>`).join("")
-        : `<tr><td colspan="9" class="muted">No one has checked in yet.</td></tr>`) + `</tbody>`;
+    $("rTable").innerHTML = `<thead><tr><th>S/N</th><th>Photo</th><th>Title</th><th>Name</th><th>MDA</th><th>Email</th><th>Date</th><th>Time in</th><th>Time out</th><th>Duration</th></tr></thead><tbody>` +
+      (rRows.length ? rRows.map((r, i) => `<tr><td class="n">${i + 1}</td><td>${r.photo_url ? `<a href="${esc(r.photo_url)}" target="_blank" rel="noopener"><img src="${esc(r.photo_url)}" alt="" loading="lazy"></a>` : ""}</td><td>${esc(r.title)}</td><td>${esc(r.name)}</td><td>${esc(r.mda)}</td><td>${esc(r.email)}</td><td class="n">${fmtDate(r.arrived_at)}</td><td class="n">${fmtTime(r.arrived_at)}</td><td class="n">${fmtTime(r.tap_out_at) || "—"}</td><td class="n">${fmtDur(r.arrived_at, r.tap_out_at) || "—"}</td></tr>`).join("")
+        : `<tr><td colspan="10" class="muted">No one has checked in yet.</td></tr>`) + `</tbody>`;
   }
   $("csvBtn").addEventListener("click", () => {
     if (!rProg) return;
     const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = [
       ["Programme", rProg.name], ["Programme code", rProg.programme_code], ["Coordinator", rProg.coordinator], ["Exported", new Date().toLocaleString()], [],
-      ["S/N", "Title", "Name", "MDA", "Date", "Time in", "Time out", "Duration", "Photo link"],
-      ...rRows.map((r, i) => [i + 1, r.title, r.name, r.mda, fmtDate(r.arrived_at), fmtTime(r.arrived_at), fmtTime(r.tap_out_at), fmtDur(r.arrived_at, r.tap_out_at), r.photo_url])
+      ["S/N", "Title", "Name", "MDA", "Email", "Date", "Time in", "Time out", "Duration", "Photo link"],
+      ...rRows.map((r, i) => [i + 1, r.title, r.name, r.mda, r.email, fmtDate(r.arrived_at), fmtTime(r.arrived_at), fmtTime(r.tap_out_at), fmtDur(r.arrived_at, r.tap_out_at), r.photo_url])
     ].map(row => row.map(q).join(",")).join("\r\n");
     const blob = new Blob(["﻿" + lines], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
