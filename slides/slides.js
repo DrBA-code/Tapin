@@ -604,19 +604,6 @@ function loop() {
     if (grab.active) { history = []; holdStart = 0; setMeter(0); return; }
   }
 
-  // Palm hold (still, open palm) toggles the pause screen.
-  const recent = history.filter(h => now - h.t < 500);
-  const spread = recent.length ? Math.max(...recent.map(h => h.x)) - Math.min(...recent.map(h => h.x)) + Math.max(...recent.map(h => h.y)) - Math.min(...recent.map(h => h.y)) : 1;
-  if (palm && spread < 0.05) {
-    if (!holdStart) holdStart = now;
-    const prog = Math.min(1, (now - holdStart) / HOLD_MS);
-    setMeter(holdLatched ? 0 : prog);
-    if (prog >= 1 && !holdLatched) { holdLatched = true; setMeter(0); setBlank(!blanked); cooldownUntil = now + COOLDOWN_MS; history = []; return; }
-  } else {
-    holdStart = 0; setMeter(0);
-    if (!palm) holdLatched = false;
-  }
-
   // Swipe: quick mostly-horizontal travel of the open hand.
   trySwipe(now);
 }
