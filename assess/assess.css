@@ -149,8 +149,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 @keyframes pop{from{transform:scale(0)}}
 
 /* word cloud */
-.cloud{flex:1;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:.4em 1em;padding:2vh 2vw}
-.cloud span{font-family:var(--display);font-weight:800;line-height:1;animation:rise .7s cubic-bezier(.2,1.3,.4,1) both;transition:font-size .6s}
+.cloud{flex:1;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:safe center;justify-content:center;gap:.4em 1em;padding:2vh 2vw}
+.cloud span{font-family:var(--display);font-weight:800;line-height:1;animation:rise .7s cubic-bezier(.2,1.3,.4,1) both}
 @keyframes rise{from{transform:translateY(40px);opacity:0}}
 
 /* gauge */

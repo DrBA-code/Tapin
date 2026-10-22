@@ -528,7 +528,14 @@ ${text.slice(0, 30000)}
       <span class="num">${total ? (numLabel ? c[j] : Math.round(c[j] / total * 100) + "%") : "–"}</span></div>`).join("")}</div>`;
   }
 
-  const VIZ = {
+  // Shrink the cloud until every word fits on the screen (nothing hidden off the bottom).
+function fitCloud(v) {
+  const c = v.querySelector(".cloud"); if (!c) return;
+  const spans = [...c.children]; let k = 1;
+  const fits = () => c.scrollHeight <= c.clientHeight + 2 && c.scrollWidth <= c.clientWidth + 2;
+  for (let i = 0; i < 30 && !fits(); i++) { k *= 0.88; spans.forEach(sp => (sp.style.fontSize = Math.max(11, Math.round(+sp.dataset.s * k)) + "px")); }
+}
+const VIZ = {
     poll(v, s, rows) { v.innerHTML = barsHtml(s.options, counts(rows, s.options.length)); },
     quiz(v, s, rows, rev) {
       v.innerHTML = barsHtml(s.options, counts(rows, s.options.length), { hide: !rev, correct: rev ? s.correct : null });
@@ -558,7 +565,10 @@ ${text.slice(0, 30000)}
       const max = Math.max(1, ...list.map(x => x.n));
       const hash = t => [...t].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
       const shown = [...list].sort((a, b) => hash(a.w) - hash(b.w));
-      v.innerHTML = list.length ? `<div class="cloud">${shown.map(x => `<span style="font-size:${Math.round(22 + 98 * Math.sqrt(x.n / max))}px;color:${COLORS[hash(x.w) % COLORS.length]}" title="${x.n}">${esc(x.w)}</span>`).join("")}</div>` : waiting("Words appear here as people answer.");
+      // Size by how often a word was given; when everyone wrote something different, all words share a middle size.
+      const size = x => max > 1 ? 22 + 98 * Math.sqrt((x.n - 1) / (max - 1)) : 56;
+      v.innerHTML = list.length ? `<div class="cloud">${shown.map(x => `<span data-s="${size(x)}" style="font-size:${Math.round(size(x))}px;color:${COLORS[hash(x.w) % COLORS.length]}" title="${x.n}">${esc(x.w)}</span>`).join("")}</div>` : waiting("Words appear here as people answer.");
+      fitCloud(v);
     },
     scale(v, s, rows) {
       const vals = rows.map(r => +r.answer?.v).filter(x => x >= 0 && x <= 10);
