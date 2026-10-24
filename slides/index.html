@@ -85,6 +85,7 @@
   #remotePanel{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));top:calc(44px + env(safe-area-inset-top,0px));z-index:8;display:flex;gap:14px;align-items:center;background:rgba(15,25,21,.92);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:12px;font-size:13px;color:#eef4ef;max-width:calc(100vw - 32px)}
   #remotePanel .rqr{width:120px;height:120px}
   @media (prefers-reduced-motion:reduce){#slideWrap canvas{animation:none!important}#hud .pop.go{animation:none;opacity:0}}
+  .kept{color:#3fb98a;font-weight:600;font-size:14px}
 </style>
 </head>
 <body>
@@ -106,6 +107,7 @@
       <input type="file" id="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.pptx,.ppt" multiple hidden>
       <div id="loaded" hidden>
         <div class="ready"><strong id="fileName"></strong><span class="muted" id="pageCount"></span></div>
+        <div class="row" style="gap:10px;align-items:center;margin-top:6px"><span class="kept" id="keptNote" hidden></span><button type="button" class="btn ghost small" id="forgetSlides">Remove these slides</button></div>
         <div class="thumbs" id="thumbs"></div>
       </div>
       <div class="err" id="fileErr" role="alert"></div>
@@ -210,6 +212,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="vendor/pdf.min.js"></script>
+<script src="../nav.js" data-home="../" data-autohide></script>
 <script type="module" src="slides.js"></script>
 </body>
 </html>

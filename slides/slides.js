@@ -37,7 +37,14 @@ const isImg = f => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.
 const isPpt = f => /\.(pptx?|ppsx?|key|odp)$/i.test(f.name);
 const natural = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 
-async function loadFiles(files) {
+// ---------------- keep the slides across a refresh (this browser only) ----------------
+const KEEP = {
+  db() { return new Promise((res, rej) => { const r = indexedDB.open("tapin-slides", 1); r.onupgradeneeded = () => r.result.createObjectStore("deck"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async put(files) { try { const db = await this.db(); await new Promise((res, rej) => { const t = db.transaction("deck", "readwrite"); t.objectStore("deck").put(files.map(f => ({ name: f.name, type: f.type, blob: f })), "last"); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch {} },
+  async get() { try { const db = await this.db(); return await new Promise(res => { const r = db.transaction("deck").objectStore("deck").get("last"); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); } catch { return null; } },
+  async clear() { try { const db = await this.db(); db.transaction("deck", "readwrite").objectStore("deck").delete("last"); } catch {} try { localStorage.removeItem("airswipe_page"); } catch {} }
+};
+async function loadFiles(files, restored) {
   $("fileErr").textContent = "";
   if (files.some(isPpt)) { $("fileErr").textContent = "Browsers can't open PowerPoint files directly. In PowerPoint use File → Save As → PDF, or File → Export → PNG to save each slide as a picture, then choose that here."; return; }
   const pdfFile = files.find(isPdf), imgs = files.filter(isImg).sort(natural);
@@ -56,6 +63,9 @@ async function loadFiles(files) {
       $("fileName").textContent = imgs.length === 1 ? imgs[0].name : `${imgs.length} pictures (${imgs[0].name} … ${imgs[imgs.length - 1].name})`;
     }
     page = 1; cache.clear();
+    if (restored) { try { const sp = JSON.parse(localStorage.getItem("airswipe_page") || "null"); if (sp && sp.total === total && sp.page >= 1 && sp.page <= total) page = sp.page; } catch {} }
+    else KEEP.put(files.filter(f => isPdf(f) || isImg(f)));
+    $("keptNote").hidden = !restored; if (restored) $("keptNote").textContent = `Kept from last time ✓${page > 1 ? ` · you were on slide ${page}` : ""}`;
     deckName = (pdfFile ? pdfFile.name : imgs[0].name).replace(/\.[^.]+$/, "");
     deckKey = deckName + "|" + total; loadThrown();
     $("pageCount").textContent = `${total} slide${total === 1 ? "" : "s"}`;
@@ -385,6 +395,7 @@ async function go(n, dir) {
   n = Math.max(1, Math.min(total, n));
   if (n === page && dir !== 0) { flash(dir > 0 ? "End" : "Start"); return; }
   page = n; zoom = 1; tx = 0; ty = 0; sharpFor = 0; zoomGesture = null; pinchPrev = null;
+  try { localStorage.setItem("airswipe_page", JSON.stringify({ page, total })); } catch {}
   const c = await slideCanvas(n);
   if (n !== page) return;
   const wrap = $("slideWrap");
@@ -670,3 +681,11 @@ function drawHand(ctx, c, lm) {
   ctx.fillStyle = "#e8b44a";
   lm.forEach(p => { ctx.beginPath(); ctx.arc(p.x * c.width, p.y * c.height, 4, 0, Math.PI * 2); ctx.fill(); });
 }
+
+// Bring back the slides from last time, so a refresh never loses them.
+(async () => {
+  const kept = await KEEP.get(); if (!kept || !kept.length || deck) return;
+  const files = kept.map(k => new File([k.blob], k.name, { type: k.type }));
+  loadFiles(files, true);
+})();
+$("forgetSlides")?.addEventListener("click", async () => { await KEEP.clear(); location.reload(); });

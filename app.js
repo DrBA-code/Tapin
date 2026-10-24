@@ -176,10 +176,10 @@
             <a class="btn small" href="#display/${p.code}" target="_blank" rel="noopener">Welcome screen</a>
             <a class="btn small ghost" href="#register/${p.code}">Register</a>
             <a class="btn small ghost" href="#qr/${p.code}" target="_blank" rel="noopener">QR poster</a>
-            <a class="btn small ghost" href="throw/#${p.code}" target="_blank" rel="noopener">Throw console</a>
-            <a class="btn small ghost" href="slides/" target="_blank" rel="noopener" data-present="${p.code}">Present slides</a>
-            <a class="btn small ghost" href="wheel/#${p.code}" target="_blank" rel="noopener">Spin the wheel</a>
-            <a class="btn small ghost" href="assess/#${p.code}" target="_blank" rel="noopener">Assessments</a>
+            <a class="btn small ghost" href="throw/#${p.code}">Throw console</a>
+            <a class="btn small ghost" href="slides/" data-present="${p.code}">Present slides</a>
+            <a class="btn small ghost" href="wheel/#${p.code}">Spin the wheel</a>
+            <a class="btn small ghost" href="assess/#${p.code}">Assessments</a>
             <button class="btn small ghost" data-act="copy" data-code="${p.code}" type="button">Copy check-in link</button>
             <button class="btn small ghost" data-act="copycoord" data-code="${p.code}" type="button">Copy coordinator link</button>
             <button class="btn small ghost" data-act="edit" type="button">Edit</button>
